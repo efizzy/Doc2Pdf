@@ -20,6 +20,9 @@
     <PackageTags>doc2pdf;word2pdf;pdf;word;docx;html;markdown;rtf;odt;converter;efizzy</PackageTags>
     <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/efizzy/Doc2Pdf</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/efizzy/Doc2Pdf</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
