@@ -71,28 +71,38 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             rid: linux-x64
             artifact: libdoc2pdf_native.so
+            apt_packages: ""
           - target: aarch64-unknown-linux-gnu
             rid: linux-arm64
             artifact: libdoc2pdf_native.so
+            apt_packages: "gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross"
           - target: x86_64-unknown-linux-musl
             rid: linux-musl-x64
             artifact: libdoc2pdf_native.so
+            apt_packages: "musl-tools musl-dev"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        if: matrix.apt_packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Cross for cross-compilation
-        run: |
-          cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build Native Release with Cross (${{ matrix.target }})
+      - name: Build Native Release (${{ matrix.target }})
         run: |
           cd src/native/core
-          cross build --release -p doc2pdf_native --target ${{ matrix.target }}
+          cargo build --release -p doc2pdf_native --target ${{ matrix.target }}
 
       - name: Stage Artifact
         run: |
