@@ -59,7 +59,7 @@ jobs:
           path: staging/${{ matrix.rid }}/${{ matrix.artifact }}
 
   # =========================================================================
-  # 2. Build Native Binaries on Linux
+  # 2. Build Native Binaries on Linux (glibc)
   # =========================================================================
   build-native-linux:
     name: Native Linux (${{ matrix.target }})
@@ -76,10 +76,6 @@ jobs:
             rid: linux-arm64
             artifact: libdoc2pdf_native.so
             apt_packages: "gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross"
-          - target: x86_64-unknown-linux-musl
-            rid: linux-musl-x64
-            artifact: libdoc2pdf_native.so
-            apt_packages: "musl-tools musl-dev"
     steps:
       - uses: actions/checkout@v4
 
@@ -114,6 +110,36 @@ jobs:
         with:
           name: native-${{ matrix.rid }}
           path: staging/${{ matrix.rid }}/${{ matrix.artifact }}
+
+  # =========================================================================
+  # 2b. Build Native Binary on Linux Musl (Alpine)
+  # =========================================================================
+  build-native-linux-musl:
+    name: Native Linux (x86_64-unknown-linux-musl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Native Release on Alpine Linux
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace/src/native/core \
+            rust:alpine sh -c "
+              apk add --no-cache build-base python3 libgcc && \
+              RUSTFLAGS='-C target-feature=-crt-static' cargo build --release -p doc2pdf_native
+            "
+
+      - name: Stage Artifact
+        run: |
+          mkdir -p staging/linux-musl-x64
+          cp src/native/core/target/release/libdoc2pdf_native.so staging/linux-musl-x64/
+
+      - name: Upload Native Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-musl-x64
+          path: staging/linux-musl-x64/libdoc2pdf_native.so
 
   # =========================================================================
   # 3. Build Native Binaries on macOS
@@ -160,7 +186,7 @@ jobs:
   # =========================================================================
   package-and-test:
     name: Pack & Cross-Platform Verification
-    needs: [build-native-windows, build-native-linux, build-native-macos]
+    needs: [build-native-windows, build-native-linux, build-native-linux-musl, build-native-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
