@@ -1,0 +1,12 @@
+﻿[package]
+name = "efizzy-geom"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Efizzy geometry and units: points, twips, EMU, inches, centimetres; rectangles; measurement parsing"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }

@@ -1,0 +1,88 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+
+[workspace.dependencies]
+# internal
+efizzy-geom = { path = "crates/geom" }
+efizzy-doc = { path = "crates/doc" }
+efizzy-fonts = { path = "crates/fonts" }
+efizzy-layout = { path = "crates/layout" }
+efizzy-docx = { path = "crates/docx" }
+efizzy-docbin = { path = "crates/docbin" }
+efizzy-formats = { path = "crates/formats" }
+efizzy-render = { path = "crates/render" }
+efizzy-pdf = { path = "crates/pdf" }
+efizzy-proof = { path = "crates/proof" }
+efizzy-engine = { path = "crates/engine" }
+efizzy-metafile = { path = "crates/metafile" }
+
+# foundation
+kurbo = { version = "0.13", features = ["serde"] }
+thiserror = "2"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+log = "0.4"
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+proptest = "1"
+rayon = "1"
+unicode-bidi = "0.3"
+unicode-segmentation = "1"
+unicode-linebreak = "0.1"
+unicode-script = "0.5"
+regex = { version = "1", default-features = false, features = ["std", "unicode", "perf"] }
+regex-automata = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "nfa-pikevm", "unicode"] }
+
+# text / rendering / formats
+skrifa = "0.47"
+harfrust = "0.13"
+wuff = "0.2.9"
+vello_cpu = "0.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff"] }
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.1.0", default-features = false, features = ["write"] }
+quick-xml = "0.41"
+zip = { version = "3", default-features = false, features = ["deflate"] }
+miniz_oxide = "0.8"
+cfb = "0.15"
+encoding_rs = "0.8"
+chardetng = "1"
+aes = "0.9"
+sha1 = "0.11"
+sha2 = "0.11"
+hmac = "0.13"
+base64 = "0.22"
+getrandom = "0.3"
+zeroize = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+debug = 0
+
+[patch.crates-io]
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef" }

@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- NuGet Package Properties -->
+    <PackageId>Efizzy.Doc2Pdf</PackageId>
+    <Title>Efizzy.Doc2Pdf</Title>
+    <AssemblyName>Efizzy.Doc2Pdf</AssemblyName>
+    <RootNamespace>Efizzy.Doc2Pdf</RootNamespace>
+    <Version>1.0.0</Version>
+    <Authors>Efizzy</Authors>
+    <Company>Efizzy</Company>
+    <Product>Efizzy.Doc2Pdf</Product>
+    <Description>High-performance, zero-dependency .NET library to convert Word (.docx, .doc), HTML, Markdown, RTF, ODT, LaTeX, XML, and plain text documents to high-fidelity PDF directly in-process via native Rust engine.</Description>
+    <PackageTags>doc2pdf;word2pdf;pdf;word;docx;html;markdown;rtf;odt;converter;efizzy</PackageTags>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Package README -->
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Pack native binaries into runtimes folder for cross-platform NuGet -->
+  <ItemGroup>
+    <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes')" />
+  </ItemGroup>
+
+  <!-- MSBuild targets to copy native assets to output directory during build -->
+  <ItemGroup>
+    <None Include="build\Efizzy.Doc2Pdf.targets" Pack="true" PackagePath="build\Efizzy.Doc2Pdf.targets" />
+    <None Include="buildTransitive\Efizzy.Doc2Pdf.targets" Pack="true" PackagePath="buildTransitive\Efizzy.Doc2Pdf.targets" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="IndexRange" Version="1.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Efizzy.Doc2Pdf.Tests" />
+  </ItemGroup>
+
+</Project>

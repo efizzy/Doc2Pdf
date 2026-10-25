@@ -1,0 +1,22 @@
+﻿[package]
+name = "efizzy-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Efizzy rasteriser: pages and thumbnails from the layout display list (vello_cpu), PNG/JPEG export"
+
+[lints]
+workspace = true
+
+[dependencies]
+efizzy-geom = { workspace = true }
+efizzy-doc = { workspace = true }
+efizzy-fonts = { workspace = true }
+efizzy-layout = { workspace = true }
+efizzy-metafile = { workspace = true }
+vello_cpu = { workspace = true }
+image = { workspace = true }
+log = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+vello_cpu = { workspace = true, features = ["multithreading"] }

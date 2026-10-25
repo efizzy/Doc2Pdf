@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Efizzy.Doc2Pdf.Cli/Efizzy.Doc2Pdf.Cli.csproj" />
+    <Project Path="samples/Efizzy.Doc2Pdf.Web/Efizzy.Doc2Pdf.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Efizzy.Doc2Pdf/Efizzy.Doc2Pdf.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Efizzy.Doc2Pdf.Tests/Efizzy.Doc2Pdf.Tests.csproj" />
+  </Folder>
+</Solution>

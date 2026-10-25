@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efizzy.Doc2Pdf Web Converter & Tester</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #eff6ff;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --radius: 12px;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .brand-icon {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .brand-title {
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.025em;
+        }
+
+        .version-badge {
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        main {
+            flex: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            display: grid;
+            grid-template-columns: 460px 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            main { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.75rem;
+        }
+
+        .card-header {
+            margin-bottom: 1.25rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .card-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Dropzone */
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #fafafa;
+            position: relative;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .dropzone-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone-text {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .dropzone-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .file-selected-box {
+            display: none;
+            background: var(--primary-light);
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-top: 1rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .file-selected-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #1e40af;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sample-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-sample {
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-sample:hover {
+            background: #e2e8f0;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-top: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.4rem;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.15s;
+            background: var(--surface);
+        }
+
+        .form-select:focus, .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-top: 1.25rem;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.875rem;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .checkbox-label input {
+            accent-color: var(--primary);
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn-convert {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.85rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1.5rem;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-convert:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-convert:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        /* Preview Panel */
+        .preview-panel {
+            display: flex;
+            flex-direction: column;
+            min-height: 600px;
+        }
+
+        .preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .metrics-bar {
+            display: none;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: var(--text);
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .metric-item span {
+            color: var(--text-muted);
+        }
+
+        .metric-highlight {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .preview-content {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #475569;
+            position: relative;
+            min-height: 550px;
+        }
+
+        .preview-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            background: #f1f5f9;
+        }
+
+        .preview-placeholder-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+        }
+
+        .preview-actions {
+            display: none;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-download {
+            background: var(--success);
+            color: white;
+            border: none;
+        }
+
+        .btn-download:hover { background: #15803d; }
+
+        .btn-open {
+            background: white;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-open:hover { background: #f8fafc; }
+
+        .error-banner {
+            display: none;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: var(--danger);
+            border-radius: 8px;
+            padding: 0.85rem 1rem;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid white;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="brand">
+            <div class="brand-icon">W</div>
+            <div class="brand-title">Efizzy.Doc2Pdf</div>
+        </a>
+        <div class="version-badge">Engine v1.0.0 (Krilla)</div>
+    </header>
+
+    <main>
+        <!-- Left: Upload & Configuration -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Select Document</h2>
+                <p class="card-subtitle">Choose a file or click a quick sample below to test.</p>
+            </div>
+
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-icon">📄</div>
+                <div class="dropzone-text">Drag & drop your file here</div>
+                <div class="dropzone-hint">or click to browse from your computer</div>
+                <div class="dropzone-hint" style="margin-top: 0.5rem; font-size: 0.75rem; color: #94a3b8;">
+                    Supports: .docx, .doc, .md, .html, .rtf, .odt, .tex, .xml, .txt
+                </div>
+                <input type="file" id="fileInput" style="display: none;" accept=".docx,.doc,.docm,.dotx,.dotm,.md,.markdown,.html,.htm,.xhtml,.rtf,.odt,.tex,.latex,.txt,.xml,.json">
+            </div>
+
+            <div class="file-selected-box" id="fileBox">
+                <div class="file-selected-info">
+                    <span>📎</span>
+                    <span id="fileNameDisplay">document.docx</span>
+                </div>
+                <button type="button" id="clearFileBtn" style="background: none; border: none; cursor: pointer; color: #64748b; font-weight: bold;">✕</button>
+            </div>
+
+            <div class="sample-buttons">
+                <button type="button" class="btn-sample" onclick="loadSample('markdown')">⚡ Load Markdown Sample</button>
+                <button type="button" class="btn-sample" onclick="loadSample('html')">⚡ Load HTML Sample</button>
+                <button type="button" class="btn-sample" onclick="loadSample('rtf')">⚡ Load RTF Sample</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="paperSelect">Paper Size Override</label>
+                <select id="paperSelect" class="form-select">
+                    <option value="original" selected>Keep Document Section Geometry</option>
+                    <option value="a4">ISO A4 (210 × 297 mm)</option>
+                    <option value="letter">US Letter (8.5 × 11 in)</option>
+                    <option value="legal">US Legal (8.5 × 14 in)</option>
+                    <option value="a3">ISO A3 (297 × 420 mm)</option>
+                    <option value="a5">ISO A5 (148 × 210 mm)</option>
+                </select>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="taggedPdf" checked>
+                    <span>Generate Accessible Tagged PDF (PDF/UA structure)</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="includeMarkup">
+                    <span>Show Track Changes Revisions (insertions/deletions)</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showComments">
+                    <span>Show Margin Comment Balloons</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="passwordInput">Password (Optional)</label>
+                <input type="password" id="passwordInput" class="form-input" placeholder="For encrypted Word documents">
+            </div>
+
+            <!-- Enterprise PDF Features -->
+            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+                <div style="font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                    <span>⚡ Enterprise Features</span>
+                </div>
+
+                <div class="form-group" style="margin-top: 0.5rem;">
+                    <label class="form-label" for="watermarkInput">Watermark Text</label>
+                    <input type="text" id="watermarkInput" class="form-input" placeholder="e.g. CONFIDENTIAL, DRAFT, INTERNAL ONLY">
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; margin-top: 0.75rem;">
+                    <div style="flex: 1;">
+                        <label class="form-label" for="watermarkColor">Color</label>
+                        <input type="text" id="watermarkColor" class="form-input" value="#C53030">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="form-label" for="pageRangeInput">Page Range</label>
+                        <input type="text" id="pageRangeInput" class="form-input" placeholder="e.g. 1-3, 5">
+                    </div>
+                </div>
+
+                <div class="checkbox-group" style="margin-top: 0.75rem;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="watermarkDiagonal" checked>
+                        <span>Diagonal Watermark (45° angle)</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; margin-top: 0.75rem;">
+                    <div style="flex: 1;">
+                        <label class="form-label" for="subjectInput">Subject</label>
+                        <input type="text" id="subjectInput" class="form-input" placeholder="Document Subject">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="form-label" for="keywordsInput">Keywords</label>
+                        <input type="text" id="keywordsInput" class="form-input" placeholder="comma, separated">
+                    </div>
+                </div>
+            </div>
+
+            <div class="error-banner" id="errorBanner"></div>
+
+            <button type="button" class="btn-convert" id="convertBtn" onclick="convertDocument()">
+                <div class="spinner" id="spinner"></div>
+                <span id="convertBtnText">Convert to PDF</span>
+            </button>
+        </div>
+
+        <!-- Right: Live PDF Preview & Performance Stats -->
+        <div class="card preview-panel">
+            <div class="preview-header">
+                <div>
+                    <h2 class="card-title">PDF Preview</h2>
+                    <p class="card-subtitle">Rendered output with embedded font subsets and selectable text.</p>
+                </div>
+            </div>
+
+            <div class="metrics-bar" id="metricsBar" style="display: none;">
+                <div class="metric-item">Speed: <span class="metric-highlight" id="metricTime">--</span></div>
+                <div class="metric-item">Input: <span id="metricInput">--</span></div>
+                <div class="metric-item">Output: <span id="metricOutput">--</span></div>
+            </div>
+
+            <div class="preview-content">
+                <div class="preview-placeholder" id="placeholder">
+                    <div class="preview-placeholder-icon">📑</div>
+                    <div style="font-weight: 600; color: #475569;">No PDF to display yet</div>
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 0.25rem;">Select a file on the left and click "Convert to PDF"</div>
+                </div>
+                <iframe id="pdfFrame"></iframe>
+            </div>
+
+            <div class="preview-actions" id="previewActions">
+                <a id="downloadBtn" class="btn-action btn-download" download="converted.pdf">Download PDF</a>
+                <a id="openTabBtn" class="btn-action btn-open" target="_blank">Open Full Screen</a>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let selectedFile = null;
+        let currentPdfBlobUrl = null;
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const fileBox = document.getElementById('fileBox');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const clearFileBtn = document.getElementById('clearFileBtn');
+        const convertBtn = document.getElementById('convertBtn');
+        const convertBtnText = document.getElementById('convertBtnText');
+        const spinner = document.getElementById('spinner');
+        const errorBanner = document.getElementById('errorBanner');
+        const metricsBar = document.getElementById('metricsBar');
+        const metricTime = document.getElementById('metricTime');
+        const metricInput = document.getElementById('metricInput');
+        const metricOutput = document.getElementById('metricOutput');
+        const placeholder = document.getElementById('placeholder');
+        const pdfFrame = document.getElementById('pdfFrame');
+        const previewActions = document.getElementById('previewActions');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const openTabBtn = document.getElementById('openTabBtn');
+
+        // Drag & Drop
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                setFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                setFile(fileInput.files[0]);
+            }
+        });
+
+        clearFileBtn.addEventListener('click', () => {
+            selectedFile = null;
+            fileInput.value = '';
+            fileBox.style.display = 'none';
+            dropzone.style.display = 'block';
+        });
+
+        function setFile(file) {
+            selectedFile = file;
+            fileNameDisplay.textContent = `${file.name} (${formatBytes(file.size)})`;
+            dropzone.style.display = 'none';
+            fileBox.style.display = 'flex';
+            hideError();
+        }
+
+        async function loadSample(type) {
+            try {
+                const res = await fetch(`/api/sample/${type}`);
+                if (!res.ok) throw new Error('Failed to load sample');
+                const text = await res.text();
+                const mime = type === 'markdown' ? 'text/markdown' : (type === 'html' ? 'text/html' : 'application/rtf');
+                const ext = type === 'markdown' ? 'md' : (type === 'html' ? 'html' : 'rtf');
+                const blob = new Blob([text], { type: mime });
+                const file = new File([blob], `sample_${type}.${ext}`, { type: mime });
+                setFile(file);
+            } catch (err) {
+                showError('Error loading sample: ' + err.message);
+            }
+        }
+
+        async function convertDocument() {
+            if (!selectedFile) {
+                showError('Please select or drop a document to convert.');
+                return;
+            }
+
+            hideError();
+            setLoading(true);
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('paper', document.getElementById('paperSelect').value);
+            formData.append('tagged', document.getElementById('taggedPdf').checked);
+            formData.append('markup', document.getElementById('includeMarkup').checked);
+            formData.append('comments', document.getElementById('showComments').checked);
+
+            const password = document.getElementById('passwordInput').value;
+            if (password) formData.append('password', password);
+
+            const watermark = document.getElementById('watermarkInput').value;
+            if (watermark) formData.append('watermark', watermark);
+
+            const watermarkColor = document.getElementById('watermarkColor').value;
+            if (watermarkColor) formData.append('watermarkColor', watermarkColor);
+
+            formData.append('watermarkDiagonal', document.getElementById('watermarkDiagonal').checked);
+
+            const pages = document.getElementById('pageRangeInput').value;
+            if (pages) formData.append('pages', pages);
+
+            const subject = document.getElementById('subjectInput').value;
+            if (subject) formData.append('subject', subject);
+
+            const keywords = document.getElementById('keywordsInput').value;
+            if (keywords) formData.append('keywords', keywords);
+
+            try {
+                const response = await fetch('/api/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errJson = await response.json().catch(() => null);
+                    throw new Error(errJson?.detail || `Conversion failed with HTTP ${response.status}`);
+                }
+
+                const timeMs = response.headers.get('X-Conversion-Time-Ms') || '0';
+                const inputBytes = response.headers.get('X-Input-Bytes') || selectedFile.size;
+                const outputBytes = response.headers.get('X-Output-Bytes');
+
+                const blob = await response.blob();
+                if (currentPdfBlobUrl) {
+                    URL.revokeObjectURL(currentPdfBlobUrl);
+                }
+                currentPdfBlobUrl = URL.createObjectURL(blob);
+
+                // Update Metrics
+                metricTime.textContent = `${timeMs} ms`;
+                metricInput.textContent = formatBytes(parseInt(inputBytes));
+                metricOutput.textContent = formatBytes(parseInt(outputBytes || blob.size));
+                metricsBar.style.display = 'flex';
+
+                // Display PDF in iframe
+                placeholder.style.display = 'none';
+                pdfFrame.style.display = 'block';
+                pdfFrame.src = currentPdfBlobUrl;
+
+                // Configure action buttons
+                const outName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pdf";
+                downloadBtn.href = currentPdfBlobUrl;
+                downloadBtn.download = outName;
+                openTabBtn.href = currentPdfBlobUrl;
+                previewActions.style.display = 'flex';
+
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function setLoading(loading) {
+            convertBtn.disabled = loading;
+            spinner.style.display = loading ? 'block' : 'none';
+            convertBtnText.textContent = loading ? 'Converting...' : 'Convert to PDF';
+        }
+
+        function showError(msg) {
+            errorBanner.textContent = msg;
+            errorBanner.style.display = 'block';
+        }
+
+        function hideError() {
+            errorBanner.style.display = 'none';
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

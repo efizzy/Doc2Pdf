@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <EfizzyNativeLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">doc2pdf_native.dll</EfizzyNativeLibName>
+    <EfizzyNativeLibName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libdoc2pdf_native.dylib</EfizzyNativeLibName>
+    <EfizzyNativeLibName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libdoc2pdf_native.so</EfizzyNativeLibName>
+
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' == 'x86'">win-x86</EfizzyPlatformRID>
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' == 'ARM64'">win-arm64</EfizzyPlatformRID>
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(EfizzyPlatformRID)' == ''">win-x64</EfizzyPlatformRID>
+
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$(PlatformTarget)' == 'ARM64'">linux-arm64</EfizzyPlatformRID>
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$(EfizzyPlatformRID)' == ''">linux-x64</EfizzyPlatformRID>
+
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(PlatformTarget)' == 'x64'">osx-x64</EfizzyPlatformRID>
+    <EfizzyPlatformRID Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(EfizzyPlatformRID)' == ''">osx-arm64</EfizzyPlatformRID>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework' Or '$(TargetFrameworkIdentifier)' == '.NETStandard'">
+    <!-- Copy the native library matching the host build OS & architecture -->
+    <None Include="$(MSBuildThisFileDirectory)..\runtimes\$(EfizzyPlatformRID)\native\$(EfizzyNativeLibName)" 
+          Condition="Exists('$(MSBuildThisFileDirectory)..\runtimes\$(EfizzyPlatformRID)\native\$(EfizzyNativeLibName)')">
+      <Link>$(EfizzyNativeLibName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+    <!-- Windows fallback if specific RID was not matched -->
+    <None Include="$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\doc2pdf_native.dll" 
+          Condition="$([MSBuild]::IsOSPlatform('Windows')) And !Exists('$(MSBuildThisFileDirectory)..\runtimes\$(EfizzyPlatformRID)\native\$(EfizzyNativeLibName)') And Exists('$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\doc2pdf_native.dll')">
+      <Link>doc2pdf_native.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+</Project>

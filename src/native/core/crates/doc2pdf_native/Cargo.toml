@@ -1,0 +1,28 @@
+[package]
+name = "doc2pdf_native"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Efizzy high-performance native C-ABI document conversion engine"
+
+[lints.rust]
+unsafe_code = "allow"
+
+[lib]
+name = "doc2pdf_native"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+efizzy-doc = { workspace = true }
+efizzy-docx = { workspace = true }
+efizzy-docbin = { workspace = true }
+efizzy-formats = { workspace = true }
+efizzy-geom = { workspace = true }
+efizzy-fonts = { workspace = true }
+efizzy-layout = { workspace = true }
+efizzy-pdf = { workspace = true }
+efizzy-engine = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+css-inline = { version = "0.23", default-features = false }
+fulgur = "0.40.0"

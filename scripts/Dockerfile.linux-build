@@ -1,0 +1,18 @@
+# Multi-stage Dockerfile to build Linux native binaries for Efizzy.Doc2Pdf
+FROM rust:1.85-bookworm AS builder
+
+WORKDIR /src
+
+# Copy core engine source code
+COPY src/native/core/ ./src/native/core/
+
+WORKDIR /src/native/core
+
+# Compile release shared library
+RUN cargo build --release -p doc2pdf_native
+
+# Output stage
+FROM alpine:latest
+WORKDIR /output
+COPY --from=builder /src/native/core/target/release/libdoc2pdf_native.so /output/libdoc2pdf_native.so
+CMD ["cp", "/output/libdoc2pdf_native.so", "/dist/"]

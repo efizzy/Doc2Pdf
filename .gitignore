@@ -1,0 +1,23 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.pdf
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Rust / Cargo
+target/
+**/*.rs.bk
+Cargo.lock
+
+# OS
+.DS_Store
+Thumbs.db
