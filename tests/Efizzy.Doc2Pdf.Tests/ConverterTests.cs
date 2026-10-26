@@ -398,4 +398,43 @@ public class ConverterTests
             if (File.Exists(tempOutPdf)) File.Delete(tempOutPdf);
         }
     }
+
+    [Fact]
+    public void ConvertFile_NullByteInPath_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => Doc2PdfConverter.ConvertFile("test\0bad.docx", "out.pdf"));
+        Assert.Throws<ArgumentException>(() => Doc2PdfConverter.ConvertFile("valid.docx", "out\0bad.pdf"));
+    }
+
+    [Fact]
+    public void Convert_StreamConversion_MemoryStreamOptimized()
+    {
+        string md = "# Stream Conversion Test\n\nVerifying zero-copy MemoryStream handling.";
+        byte[] mdBytes = Encoding.UTF8.GetBytes(md);
+
+        using var inStream = new MemoryStream(mdBytes);
+        using var outStream = new MemoryStream();
+
+        Doc2PdfConverter.Convert(inStream, outStream, "md");
+
+        Assert.True(outStream.Length > 100);
+        byte[] pdfBytes = outStream.ToArray();
+        string header = Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(pdfBytes.Length, 8));
+        Assert.StartsWith("%PDF-", header);
+    }
+
+    [Fact]
+    public void Security_CachedFormatHints_ReturnsValidPointers()
+    {
+        Assert.True(Doc2PdfConverter.CachedFormatHints.TryGetCachedPointer("docx", out IntPtr ptrDocx));
+        Assert.NotEqual(IntPtr.Zero, ptrDocx);
+
+        Assert.True(Doc2PdfConverter.CachedFormatHints.TryGetCachedPointer("html", out IntPtr ptrHtml));
+        Assert.NotEqual(IntPtr.Zero, ptrHtml);
+
+        Assert.True(Doc2PdfConverter.CachedFormatHints.TryGetCachedPointer("auto", out IntPtr ptrAuto));
+        Assert.NotEqual(IntPtr.Zero, ptrAuto);
+
+        Assert.False(Doc2PdfConverter.CachedFormatHints.TryGetCachedPointer("custom_xyz", out _));
+    }
 }

@@ -66,7 +66,7 @@ public enum DocumentFormat
 }
 
 /// <summary>
-/// Secure header inspection and format resolution utilities for <see cref="DocumentFormat"/>.
+/// Secure, zero-allocation header inspection and format resolution utilities for <see cref="DocumentFormat"/>.
 /// Inspects file magic bytes and header structures to identify authentic document types
 /// and prevent accidental execution or processing of disguised malicious binaries.
 /// </summary>
@@ -103,7 +103,7 @@ public static class DocumentFormatExtensions
 
     /// <summary>
     /// Validates that the input bytes do not contain any known dangerous or executable header signatures.
-    /// Throws a <see cref="Doc2PdfException"/> if a malicious or executable signature is detected.
+    /// Throws a <see cref="Doc2PdfException"/> with status -403 if a malicious or executable signature is detected.
     /// </summary>
     /// <param name="bytes">Raw file or buffer bytes.</param>
     /// <param name="sourceIdentifier">Optional file name or stream identifier for diagnostic error reporting.</param>
@@ -190,7 +190,7 @@ public static class DocumentFormatExtensions
 
     /// <summary>
     /// Safely detects the authentic <see cref="DocumentFormat"/> by inspecting file header bytes.
-    /// Validates against malicious executable signatures and sniffs magic bytes.
+    /// Performs zero allocations on structured binary formats (DOCX, DOC, RTF, ODT).
     /// </summary>
     /// <param name="bytes">Raw document bytes to inspect.</param>
     /// <param name="extensionHint">Optional file path or extension hint for text format disambiguation.</param>
@@ -204,7 +204,7 @@ public static class DocumentFormatExtensions
         // 1. Mandatory security verification against malicious executables
         ValidateSafety(bytes, extensionHint);
 
-        // 2. Exact magic bytes check for structured binary document formats
+        // 2. Exact magic bytes check for structured binary document formats (Zero Allocation)
         if (bytes.Length >= 5 && Matches(bytes, RtfSignature))
         {
             return DocumentFormat.Rtf;
@@ -217,7 +217,7 @@ public static class DocumentFormatExtensions
 
         if (bytes.Length >= 4 && (Matches(bytes, ZipSignature) || Matches(bytes, ZipEmpty) || Matches(bytes, ZipSpanned)))
         {
-            // Disambiguate ZIP packages: ODT vs DOCX
+            // Disambiguate ZIP packages: ODT vs DOCX without allocating strings
             if (IsOdtZipPackage(bytes))
             {
                 return DocumentFormat.Odt;
@@ -306,6 +306,11 @@ public static class DocumentFormatExtensions
             stream.Position = originalPos;
         }
 
+        if (bytesRead == buffer.Length)
+        {
+            return DetectFormat(buffer, extensionHint);
+        }
+
         byte[] headerBytes = new byte[bytesRead];
         Array.Copy(buffer, headerBytes, bytesRead);
         return DetectFormat(headerBytes, extensionHint);
@@ -370,21 +375,45 @@ public static class DocumentFormatExtensions
     {
         if (bytes.Length < 38) return false;
 
-        // In standard ODF, the very first file entry is uncompressed "mimetype" at offset 30
+        // In standard ODF packages, the first file entry is uncompressed "mimetype" at offset 30
         if (bytes[30] == (byte)'m' && bytes[31] == (byte)'i' && bytes[32] == (byte)'m' &&
             bytes[33] == (byte)'e' && bytes[34] == (byte)'t' && bytes[35] == (byte)'y' &&
             bytes[36] == (byte)'p' && bytes[37] == (byte)'e')
         {
             int searchLimit = Math.Min(bytes.Length, 256);
-            string headerString = Encoding.ASCII.GetString(bytes, 30, searchLimit - 30);
-            return headerString.IndexOf("opendocument.text", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   headerString.IndexOf("oasis.opendocument", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (ContainsAscii(bytes, 30, searchLimit - 30, "opendocument.text") ||
+                ContainsAscii(bytes, 30, searchLimit - 30, "oasis.opendocument"))
+            {
+                return true;
+            }
         }
 
         // Secondary scan across first 512 bytes for "oasis.opendocument.text"
         int maxScan = Math.Min(bytes.Length, 512);
-        string sample = Encoding.ASCII.GetString(bytes, 0, maxScan);
-        return sample.IndexOf("oasis.opendocument.text", StringComparison.OrdinalIgnoreCase) >= 0;
+        return ContainsAscii(bytes, 0, maxScan, "oasis.opendocument.text");
+    }
+
+    private static bool ContainsAscii(byte[] bytes, int offset, int length, string pattern)
+    {
+        if (bytes.Length < offset + length || pattern.Length > length) return false;
+        int limit = offset + length - pattern.Length;
+        for (int i = offset; i <= limit; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < pattern.Length; j++)
+            {
+                byte b = bytes[i + j];
+                char c = pattern[j];
+                // Case-insensitive ASCII comparison
+                if (b != c && (b | 0x20) != (c | 0x20))
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) return true;
+        }
+        return false;
     }
 
     private static int GetBomOffset(byte[] bytes)

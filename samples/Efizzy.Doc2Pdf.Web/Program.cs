@@ -1,12 +1,28 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Efizzy.Doc2Pdf;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Enable static files
+// Enable routing and logging
 builder.Services.AddRouting();
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 var app = builder.Build();
+
+// OWASP Top 10 Security Middleware: Enforce defense-in-depth security headers
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "SAMEORIGIN";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["X-XSS-Protection"] = "0";
+    headers["Content-Security-Policy"] =
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; object-src 'none'; frame-src 'self' blob:; connect-src 'self';";
+    await next();
+});
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -82,12 +98,15 @@ app.MapGet("/api/sample/{name}", (string name) =>
 });
 
 // Conversion endpoint
-app.MapPost("/api/convert", async (HttpRequest request) =>
+app.MapPost("/api/convert", async (HttpRequest request, ILoggerFactory loggerFactory) =>
 {
+    var logger = loggerFactory.CreateLogger("Doc2PdfConverter.Web");
+    var cancellationToken = request.HttpContext.RequestAborted;
+
     if (!request.HasFormContentType)
         return Results.BadRequest(new { error = "Request must be multipart/form-data." });
 
-    var form = await request.ReadFormAsync();
+    var form = await request.ReadFormAsync(cancellationToken);
     var file = form.Files["file"];
 
     if (file == null || file.Length == 0)
@@ -111,10 +130,11 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
     bool watermarkDiagonal = !bool.TryParse(form["watermarkDiagonal"], out bool wd) || wd;
     string? pages = form["pages"].FirstOrDefault();
 
+    // Avoid memory reallocations by pre-allocating the MemoryStream with the exact file size
     byte[] inputBytes;
-    using (var ms = new MemoryStream())
+    using (var ms = new MemoryStream((int)file.Length))
     {
-        await file.CopyToAsync(ms);
+        await file.CopyToAsync(ms, cancellationToken);
         inputBytes = ms.ToArray();
     }
 
@@ -126,6 +146,7 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
     }
     catch (Doc2PdfException secEx) when (secEx.StatusCode == -403 || secEx.Message.Contains("Security validation rejected"))
     {
+        logger.LogWarning("Security rejection for file '{FileName}': {Reason}", file.FileName, secEx.Message);
         return Results.Problem(
             detail: secEx.Message,
             statusCode: StatusCodes.Status400BadRequest,
@@ -168,14 +189,13 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
     var sw = Stopwatch.StartNew();
     try
     {
-        byte[] pdfBytes = Doc2PdfConverter.Convert(inputBytes, detectedFormat, options);
+        // Non-blocking async execution with cancellation token support (Anti-DoS)
+        byte[] pdfBytes = await Doc2PdfConverter.ConvertAsync(inputBytes, detectedFormat.ToFormatHint(), options, cancellationToken);
         sw.Stop();
 
+        // Sanitize output filename to strictly alphanumeric, dashes, dots, and underscores to prevent header injection
         string rawName = Path.GetFileNameWithoutExtension(file.FileName);
-        string safeName = string.Join("_", rawName.Split(Path.GetInvalidFileNameChars()))
-            .Replace("\r", "")
-            .Replace("\n", "")
-            .Trim();
+        string safeName = Regex.Replace(rawName, @"[^a-zA-Z0-9_\-\.]", "_").Trim('_');
         if (string.IsNullOrWhiteSpace(safeName)) safeName = "converted";
         string outName = safeName + ".pdf";
 
@@ -184,11 +204,19 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
         request.HttpContext.Response.Headers["X-Input-Bytes"] = inputBytes.Length.ToString();
         request.HttpContext.Response.Headers["X-Output-Bytes"] = pdfBytes.Length.ToString();
 
+        logger.LogInformation("Converted '{FileName}' ({Format}) -> '{OutName}' ({Bytes:N0} bytes) in {Ms} ms",
+            file.FileName, detectedFormat, outName, pdfBytes.Length, sw.ElapsedMilliseconds);
+
         return Results.File(pdfBytes, "application/pdf", outName, enableRangeProcessing: true);
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(499); // Client Closed Request
     }
     catch (Exception ex)
     {
         sw.Stop();
+        logger.LogError(ex, "Conversion failed for file '{FileName}'", file.FileName);
         return Results.Problem(
             detail: ex.Message,
             statusCode: 500,

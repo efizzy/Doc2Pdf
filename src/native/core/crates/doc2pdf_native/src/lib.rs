@@ -145,6 +145,42 @@ fn parse_page_range(spec: &str, total_pages: usize) -> Option<Vec<usize>> {
     }
 }
 
+/// Security verification against dangerous executable header magic bytes.
+/// Prevents parser confusion, memory corruption, and executing malicious binaries.
+fn is_dangerous_binary(bytes: &[u8]) -> bool {
+    // 1. Windows PE / DOS Executables (MZ or ZM signature)
+    if bytes.len() >= 2 && ((bytes[0] == b'M' && bytes[1] == b'Z') || (bytes[0] == b'Z' && bytes[1] == b'M')) {
+        return true;
+    }
+    // 2. Linux / Unix ELF binaries (\x7FELF)
+    if bytes.len() >= 4 && &bytes[..4] == b"\x7FELF" {
+        return true;
+    }
+    // 3. macOS Mach-O & Java Class Bytecode
+    if bytes.len() >= 4 && (
+        &bytes[..4] == &[0xFE, 0xED, 0xFA, 0xCE] ||
+        &bytes[..4] == &[0xCE, 0xFA, 0xED, 0xFE] ||
+        &bytes[..4] == &[0xFE, 0xED, 0xFA, 0xCF] ||
+        &bytes[..4] == &[0xCF, 0xFA, 0xED, 0xFE] ||
+        &bytes[..4] == &[0xCA, 0xFE, 0xBA, 0xBE]
+    ) {
+        return true;
+    }
+    // 4. Windows Shell Link (.lnk)
+    if bytes.len() >= 8 && &bytes[..8] == &[0x4C, 0x00, 0x00, 0x00, 0x01, 0x14, 0x02, 0x00] {
+        return true;
+    }
+    // 5. Unix Shebang Script (#!)
+    if bytes.len() >= 2 && &bytes[..2] == b"#!" {
+        return true;
+    }
+    // 6. Compiled HTML Help (ITSF / .chm)
+    if bytes.len() >= 4 && &bytes[..4] == b"ITSF" {
+        return true;
+    }
+    false
+}
+
 /// Helper to extract fallback background colors from linear gradients so that
 /// elements with dark gradient backgrounds and white text remain readable.
 fn normalize_gradients(html: &str) -> String {
@@ -222,30 +258,26 @@ fn preprocess_html_if_needed(ext: &str, bytes: &[u8]) -> Option<Vec<u8>> {
 /// Prepares HTML for browser-grade print fidelity:
 /// - Promotes `@media print` rules so print styles and page constraints take effect
 /// - Normalizes legacy `page-break-*` to CSS Fragmentation Level 3 `break-*`
-/// - Ensures single-side borders (like red title underlines) receive explicit border colors
 /// - Ensures orphan avoidance (`break-after: avoid;`) and top-level section pagination
-/// - Applies standard browser print headers and footers via CSS Paged Media `@page` margin boxes
+/// - Applies standard browser print margins via CSS Paged Media `@page`
 fn prepare_html_for_print(
     html: &str,
-    title_override: Option<&str>,
+    _title_override: Option<&str>,
     watermark: Option<(&str, Option<&str>, bool, f32)>,
     subject: Option<&str>,
     keywords: Option<&str>,
 ) -> String {
-    let doc_title = title_override.map(|s| s.to_string()).or_else(|| {
-        if let Some(start) = html.find("<title>") {
-            let after = &html[start + 7..];
-            if let Some(end) = after.find("</title>") {
-                return Some(after[..end].trim().to_string());
-            }
-        }
-        None
-    });
-
     let mut normalized = html
         .replace("page-break-inside", "break-inside")
         .replace("page-break-before", "break-before")
         .replace("page-break-after", "break-after");
+
+    // Prepend <!DOCTYPE html> if missing to ensure HTML5 standard mode
+    // and prevent parser warnings in html5ever
+    let trimmed = normalized.trim_start();
+    if !trimmed.starts_with("<!DOCTYPE") && !trimmed.starts_with("<!doctype") {
+        normalized = format!("<!DOCTYPE html>\n{normalized}");
+    }
 
     // Inject metadata tags if specified
     let mut meta_tags = String::new();
@@ -288,77 +320,27 @@ fn prepare_html_for_print(
         }
     }
 
-    // Ensure border-color is populated if only border-bottom / border-left was set
-    // Fulgur's convert/style/border.rs checks border_top_color for border_color.
-    if normalized.contains("border-bottom: 3pt solid #c53030") && !normalized.contains("border-color: #c53030") {
-        normalized = normalized.replace(
-            "border-bottom: 3pt solid #c53030;",
-            "border-bottom: 3pt solid #c53030; border-color: #c53030;",
-        );
-    }
-
-    // Section break-before propagation:
-    // When a document contains discrete major sections that cannot fit on the current page,
-    // ensure each section begins on a fresh page.
-    let section_headers = [
-        "<h2>2. EVENT OVERVIEW",
-        "<h2>4. RATIONALE FOR KEY DECISIONS",
-        "<h2>7. DETAILED COST BREAKDOWN",
-        "<h2>8. LOGISTICS (NON-COST ITEMS)",
-        "<h2>10. FINAL FINANCIAL SUMMARY",
-    ];
-    for h in section_headers {
-        let pattern_lf = format!("<div class=\"section\">\n    {h}");
-        let pattern_crlf = format!("<div class=\"section\">\r\n    {h}");
-        let replacement_lf = format!("<div class=\"section\" style=\"break-before: page;\">\n    {h}");
-        let replacement_crlf = format!("<div class=\"section\" style=\"break-before: page;\">\r\n    {h}");
-
-        if normalized.contains(&pattern_lf) {
-            normalized = normalized.replace(&pattern_lf, &replacement_lf);
-        } else if normalized.contains(&pattern_crlf) {
-            normalized = normalized.replace(&pattern_crlf, &replacement_crlf);
-        }
-    }
-
-    // Inject browser print headers and footers (@page margin boxes)
-    let title_text = doc_title.unwrap_or_else(|| "Document".to_string());
-    if !normalized.contains("@bottom-center") && !normalized.contains("@top-left") {
-        let default_header_footer = format!(
-            r#"
-@page {{
+    // Standard browser print styles: default print margins and heading orphan avoidance
+    if !normalized.contains("@page") {
+        let default_print_css = r#"
+@page {
     margin: 15mm 15mm 18mm 15mm;
-    @top-left {{
-        content: "10/24/26, 7:17 PM";
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 8pt;
-        color: #718096;
-    }}
-    @top-right {{
-        content: "{title_text}";
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 8pt;
-        color: #718096;
-    }}
-    @bottom-center {{
-        content: "Page " counter(page) " of " counter(pages);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 9pt;
-        color: #718096;
-    }}
-}}
-h2, h3 {{
+}
+h1, h2, h3, h4 {
     break-after: avoid;
-}}
-"#
-        );
+}
+.break-before, .page-break {
+    break-before: page;
+}
+"#;
         if let Some(pos) = normalized.find("<style>") {
-            normalized.insert_str(pos + 7, &default_header_footer);
+            normalized.insert_str(pos + 7, default_print_css);
         } else if let Some(pos) = normalized.find("<style ") {
             if let Some(close_tag) = normalized[pos..].find('>') {
-                normalized.insert_str(pos + close_tag + 1, &default_header_footer);
+                normalized.insert_str(pos + close_tag + 1, default_print_css);
             }
         } else if let Some(pos) = normalized.find("</head>") {
-            let tag = format!("<style>{default_header_footer}</style>");
+            let tag = format!("<style>{default_print_css}</style>\n");
             normalized.insert_str(pos, &tag);
         }
     }
@@ -468,6 +450,10 @@ pub unsafe extern "C" fn doc2pdf_convert_buffer(
         }
 
         let input_slice = unsafe { std::slice::from_raw_parts(in_bytes, in_len) };
+        if is_dangerous_binary(input_slice) {
+            return Err("Security validation rejected: dangerous executable header signature detected".to_string());
+        }
+
         let ext = if format_hint.is_null() {
             "docx".to_string()
         } else {
@@ -491,12 +477,13 @@ pub unsafe extern "C" fn doc2pdf_convert_buffer(
         if is_html {
             let html_str = String::from_utf8_lossy(input_slice);
             if let Ok(pdf_data) = convert_html_with_fulgur(&html_str, options, None) {
-                let mut boxed = pdf_data.into_boxed_slice();
+                let boxed = pdf_data.into_boxed_slice();
+                let len = boxed.len();
+                let ptr = Box::into_raw(boxed) as *mut u8;
                 unsafe {
-                    *out_len = boxed.len();
-                    *out_bytes = boxed.as_mut_ptr();
+                    *out_len = len;
+                    *out_bytes = ptr;
                 }
-                std::mem::forget(boxed);
                 return Ok(());
             }
         }
@@ -632,12 +619,13 @@ pub unsafe extern "C" fn doc2pdf_convert_buffer(
         let pdf_data = efizzy_pdf::export(&doc, &pdf_opts).map_err(|e| e.to_string())?;
 
         // Return allocated buffer to caller
-        let mut boxed = pdf_data.into_boxed_slice();
+        let boxed = pdf_data.into_boxed_slice();
+        let len = boxed.len();
+        let ptr = Box::into_raw(boxed) as *mut u8;
         unsafe {
-            *out_len = boxed.len();
-            *out_bytes = boxed.as_mut_ptr();
+            *out_len = len;
+            *out_bytes = ptr;
         }
-        std::mem::forget(boxed);
 
         Ok(())
     });
@@ -685,6 +673,9 @@ pub unsafe extern "C" fn doc2pdf_convert_file(
         let out_str = unsafe { CStr::from_ptr(out_path) }.to_str().map_err(|e| e.to_string())?;
 
         let in_bytes = std::fs::read(in_str).map_err(|e| format!("Failed to read '{in_str}': {e}"))?;
+        if is_dangerous_binary(&in_bytes) {
+            return Err("Security validation rejected: dangerous executable header signature detected".to_string());
+        }
         let in_path_obj = Path::new(in_str);
         let ext = in_path_obj
             .extension()
@@ -796,26 +787,23 @@ pub unsafe extern "C" fn doc2pdf_get_last_error(buf: *mut c_char, max_len: usize
 
     let result = catch_unwind(|| {
         LAST_ERROR.with(|err| {
-            let msg = match err.borrow().as_ref() {
-                Some(m) => m.clone(),
-                None => return 0,
+            let borrow = err.borrow();
+            let msg = match borrow.as_ref() {
+                Some(m) => m.as_str(),
+                None => {
+                    unsafe { *buf = 0; }
+                    return 0;
+                }
             };
 
-            let c_str = CString::new(msg).unwrap_or_default();
-            let bytes = c_str.as_bytes_with_nul();
-            if bytes.len() > max_len {
-                let truncated = &bytes[..max_len - 1];
-                unsafe {
-                    std::ptr::copy_nonoverlapping(truncated.as_ptr() as *const c_char, buf, truncated.len());
-                    *buf.add(max_len - 1) = 0;
-                }
-                return 1; // truncated
+            let bytes = msg.as_bytes();
+            let to_copy = bytes.len().min(max_len - 1);
+            unsafe {
+                std::ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, buf, to_copy);
+                *buf.add(to_copy) = 0;
             }
 
-            unsafe {
-                std::ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, buf, bytes.len());
-            }
-            0
+            if bytes.len() >= max_len { 1 } else { 0 }
         })
     });
 
@@ -951,6 +939,29 @@ mod tests {
                 md.len(),
                 format_hint.as_ptr(),
                 &opts,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+        assert_eq!(status, 0);
+        assert!(out_len > 100);
+        let pdf_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len) };
+        assert!(pdf_slice.starts_with(b"%PDF"));
+        unsafe { word2pdf_free_buffer(out_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_benchmark_html_conversion() {
+        let html = "<html><body><h1>Benchmark Document</h1><p>Test document</p></body></html>";
+        let format_hint = CString::new("html").unwrap();
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: usize = 0;
+        let status = unsafe {
+            word2pdf_convert_buffer(
+                html.as_ptr(),
+                html.len(),
+                format_hint.as_ptr(),
+                std::ptr::null(),
                 &mut out_ptr,
                 &mut out_len,
             )

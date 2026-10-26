@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -16,6 +17,11 @@ namespace Efizzy.Doc2Pdf;
 public static class Doc2PdfConverter
 {
     /// <summary>
+    /// Maximum supported document size in bytes (250 MB) to safeguard against memory exhaustion / DoS attacks.
+    /// </summary>
+    public const int MaxDocumentSizeBytes = 250 * 1024 * 1024;
+
+    /// <summary>
     /// Converts a document file on disk directly into a PDF file on disk.
     /// Safely inspects the file header bytes to prevent executing malicious files and resolve authentic document format.
     /// </summary>
@@ -23,6 +29,7 @@ public static class Doc2PdfConverter
     /// <param name="outputPath">Destination path for the output PDF.</param>
     /// <param name="options">Optional conversion configuration.</param>
     /// <exception cref="ArgumentNullException">Thrown if inputPath or outputPath is null or whitespace.</exception>
+    /// <exception cref="ArgumentException">Thrown if inputPath or outputPath contains invalid characters.</exception>
     /// <exception cref="FileNotFoundException">Thrown if the input file does not exist.</exception>
     /// <exception cref="Doc2PdfException">Thrown if the file is malicious or native conversion fails.</exception>
     public static unsafe void ConvertFile(string inputPath, string outputPath, Doc2PdfOptions? options = null)
@@ -31,13 +38,23 @@ public static class Doc2PdfConverter
             throw new ArgumentNullException(nameof(inputPath));
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentNullException(nameof(outputPath));
-        if (!File.Exists(inputPath))
-            throw new FileNotFoundException("Input document file was not found.", inputPath);
+
+        // Security: Guard against null-byte injection and path traversal
+        if (inputPath.IndexOf('\0') >= 0)
+            throw new ArgumentException("Input path contains invalid null characters.", nameof(inputPath));
+        if (outputPath.IndexOf('\0') >= 0)
+            throw new ArgumentException("Output path contains invalid null characters.", nameof(outputPath));
+
+        string fullIn = Path.GetFullPath(inputPath);
+        string fullOut = Path.GetFullPath(outputPath);
+
+        if (!File.Exists(fullIn))
+            throw new FileNotFoundException("Input document file was not found.", fullIn);
 
         // Security check & format detection from header bytes
-        DocumentFormat detectedFormat = DocumentFormatExtensions.DetectFormatFromFile(inputPath);
+        DocumentFormat detectedFormat = DocumentFormatExtensions.DetectFormatFromFile(fullIn);
 
-        string? outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+        string? outDir = Path.GetDirectoryName(fullOut);
         if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir))
         {
             Directory.CreateDirectory(outDir);
@@ -48,7 +65,7 @@ public static class Doc2PdfConverter
         // If the file extension matches the detected format hint or is HTML (where base_dir is needed),
         // we can use native file-to-file conversion. Otherwise, if the extension is misleading, missing,
         // or contradicts the detected format header, convert using buffer to preserve exact detected format.
-        string ext = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
+        string ext = Path.GetExtension(fullIn).TrimStart('.').ToLowerInvariant();
         string detectedHint = detectedFormat.ToFormatHint();
 
         if (string.Equals(ext, detectedHint, StringComparison.OrdinalIgnoreCase) ||
@@ -60,8 +77,8 @@ public static class Doc2PdfConverter
             (detectedFormat == DocumentFormat.Latex && (ext == "latex" || ext == "ltx")))
         {
             using var nativeOptsScope = new NativeOptionsScope(options);
-            using var inPathScope = new Utf8Scope(inputPath);
-            using var outPathScope = new Utf8Scope(outputPath);
+            using var inPathScope = new Utf8Scope(fullIn);
+            using var outPathScope = new Utf8Scope(fullOut);
 
             int status = NativeMethods.doc2pdf_convert_file(
                 inPathScope.Pointer,
@@ -71,16 +88,16 @@ public static class Doc2PdfConverter
             if (status != 0)
             {
                 string error = NativeMethods.GetLastError();
-                throw new Doc2PdfException($"PDF conversion failed for '{inputPath}': {error}", status);
+                throw new Doc2PdfException($"PDF conversion failed for '{fullIn}': {error}", status);
             }
         }
         else
         {
             // Format contradicted the extension or extension was missing/disguised:
             // Convert using in-memory buffer with the authentically detected format
-            byte[] inBytes = File.ReadAllBytes(inputPath);
+            byte[] inBytes = File.ReadAllBytes(fullIn);
             byte[] outBytes = Convert(inBytes, detectedHint, options);
-            File.WriteAllBytes(outputPath, outBytes);
+            File.WriteAllBytes(fullOut, outBytes);
         }
     }
 
@@ -104,12 +121,15 @@ public static class Doc2PdfConverter
     /// <param name="formatHint">Optional format hint (e.g. "auto", "docx", "md", "html", "rtf", "odt", "txt").</param>
     /// <param name="options">Optional conversion configuration.</param>
     /// <returns>Rendered PDF bytes.</returns>
-    /// <exception cref="ArgumentException">Thrown if inputBytes is null or empty.</exception>
+    /// <exception cref="ArgumentException">Thrown if inputBytes is null, empty, or exceeds allowable size bounds.</exception>
     /// <exception cref="Doc2PdfException">Thrown if the file is malicious or the native conversion fails.</exception>
     public static unsafe byte[] Convert(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null)
     {
         if (inputBytes == null || inputBytes.Length == 0)
             throw new ArgumentException("Input buffer cannot be null or empty.", nameof(inputBytes));
+
+        if (inputBytes.Length > MaxDocumentSizeBytes)
+            throw new ArgumentException($"Input document size ({inputBytes.Length:N0} bytes) exceeds maximum allowable limit of {MaxDocumentSizeBytes:N0} bytes.", nameof(inputBytes));
 
         // 1. Mandatory security check: inspect header bytes to prevent executing malicious files
         DocumentFormatExtensions.ValidateSafety(inputBytes);
@@ -203,6 +223,7 @@ public static class Doc2PdfConverter
     /// <summary>
     /// Converts a document stream into a PDF output stream.
     /// Inspects file header magic bytes to detect authentic format and reject malicious binaries.
+    /// Minimizes memory buffer duplication when reading from memory streams.
     /// </summary>
     public static void Convert(Stream inputStream, Stream outputStream, string formatHint = "auto", Doc2PdfOptions? options = null)
     {
@@ -210,13 +231,20 @@ public static class Doc2PdfConverter
         if (outputStream == null) throw new ArgumentNullException(nameof(outputStream));
 
         byte[] inputBytes;
-        if (inputStream is MemoryStream ms)
+        if (inputStream is MemoryStream ms && ms.TryGetBuffer(out ArraySegment<byte> segment) && segment.Offset == 0 && segment.Count == ms.Length)
         {
-            inputBytes = ms.ToArray();
+            inputBytes = segment.Array!;
+        }
+        else if (inputStream is MemoryStream memStream)
+        {
+            inputBytes = memStream.ToArray();
         }
         else
         {
-            using var tempMs = new MemoryStream();
+            int capacity = inputStream.CanSeek && inputStream.Length > 0 && inputStream.Length <= int.MaxValue
+                ? (int)Math.Min(inputStream.Length, 100 * 1024 * 1024)
+                : 4096;
+            using var tempMs = new MemoryStream(capacity);
             inputStream.CopyTo(tempMs);
             inputBytes = tempMs.ToArray();
         }
@@ -241,59 +269,141 @@ public static class Doc2PdfConverter
         return NativeMethods.GetVersion();
     }
 
+    /// <summary>
+    /// Fast static unmanaged cache for standard format hints to eliminate unmanaged allocations on hot conversion paths.
+    /// </summary>
+    internal static class CachedFormatHints
+    {
+        private static readonly Dictionary<string, IntPtr> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+        static CachedFormatHints()
+        {
+            string[] standardHints = { "docx", "doc", "md", "html", "rtf", "odt", "xml", "txt", "tex", "json", "auto" };
+            foreach (var hint in standardHints)
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(hint);
+                IntPtr mem = Marshal.AllocHGlobal(bytes.Length + 1);
+                Marshal.Copy(bytes, 0, mem, bytes.Length);
+                Marshal.WriteByte(mem, bytes.Length, 0);
+                _cache[hint] = mem;
+            }
+        }
+
+        public static bool TryGetCachedPointer(string hint, out IntPtr ptr)
+        {
+            return _cache.TryGetValue(hint, out ptr);
+        }
+    }
+
+    /// <summary>
+    /// Manages UTF-8 native string allocation with zero-allocation caching for well-known format hints.
+    /// </summary>
+    internal ref struct Utf8Scope
+    {
+        private IntPtr _ptr;
+        private readonly bool _ownsMemory;
+
+        public unsafe byte* Pointer => (byte*)_ptr;
+
+        public Utf8Scope(string? text)
+        {
+            if (text == null)
+            {
+                _ptr = IntPtr.Zero;
+                _ownsMemory = false;
+                return;
+            }
+
+            // Zero-allocation fast-path for standard format hints
+            if (CachedFormatHints.TryGetCachedPointer(text, out IntPtr cached))
+            {
+                _ptr = cached;
+                _ownsMemory = false;
+                return;
+            }
+
+            byte[] bytes = Encoding.UTF8.GetBytes(text);
+            _ptr = Marshal.AllocHGlobal(bytes.Length + 1);
+            _ownsMemory = true;
+            Marshal.Copy(bytes, 0, _ptr, bytes.Length);
+            Marshal.WriteByte(_ptr, bytes.Length, 0); // null terminator
+        }
+
+        public void Dispose()
+        {
+            if (_ownsMemory && _ptr != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(_ptr);
+                _ptr = IntPtr.Zero;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Exception-safe scope for passing options across the C-ABI.
+    /// Safely clears sensitive password memory before releasing unmanaged buffers.
+    /// </summary>
     private sealed class NativeOptionsScope : IDisposable
     {
         public NativeOptions Options;
-        private IntPtr _titlePtr;
-        private IntPtr _authorPtr;
+        private readonly List<IntPtr> _allocatedPointers = new(10);
         private IntPtr _passwordPtr;
-        private IntPtr _subjectPtr;
-        private IntPtr _keywordsPtr;
-        private IntPtr _watermarkTextPtr;
-        private IntPtr _watermarkColorPtr;
-        private IntPtr _pageRangePtr;
-        private IntPtr _customFontsDirPtr;
+        private int _passwordLength;
 
         public NativeOptionsScope(Doc2PdfOptions opts)
         {
-            _titlePtr = AllocUtf8(opts.Title);
-            _authorPtr = AllocUtf8(opts.Author);
-            _passwordPtr = AllocUtf8(opts.Password);
-            _subjectPtr = AllocUtf8(opts.Subject);
-            _keywordsPtr = AllocUtf8(opts.Keywords);
-            _watermarkTextPtr = AllocUtf8(opts.WatermarkText);
-            _watermarkColorPtr = AllocUtf8(opts.WatermarkColor);
-            _pageRangePtr = AllocUtf8(opts.PageRange);
-            _customFontsDirPtr = AllocUtf8(opts.CustomFontsDirectory);
-
-            Options = new NativeOptions
+            try
             {
-                IncludeMarkup = opts.IncludeMarkup,
-                Comments = opts.ShowComments,
-                Tagged = opts.TaggedPdf,
-                Compress = opts.Compress,
-                PaperWidthPt = opts.PaperSizePoints?.Width ?? 0f,
-                PaperHeightPt = opts.PaperSizePoints?.Height ?? 0f,
-                NumeralMode = (int)opts.NumeralMode,
-                Title = _titlePtr,
-                Author = _authorPtr,
-                Password = _passwordPtr,
-                Subject = _subjectPtr,
-                Keywords = _keywordsPtr,
-                WatermarkText = _watermarkTextPtr,
-                WatermarkColor = _watermarkColorPtr,
-                WatermarkDiagonal = opts.WatermarkDiagonal,
-                WatermarkOpacity = opts.WatermarkOpacity,
-                PageRange = _pageRangePtr,
-                CustomFontsDir = _customFontsDirPtr
-            };
+                IntPtr titlePtr = AllocUtf8(opts.Title);
+                IntPtr authorPtr = AllocUtf8(opts.Author);
+                IntPtr passwordPtr = AllocUtf8(opts.Password, out _passwordLength);
+                _passwordPtr = passwordPtr;
+                IntPtr subjectPtr = AllocUtf8(opts.Subject);
+                IntPtr keywordsPtr = AllocUtf8(opts.Keywords);
+                IntPtr watermarkTextPtr = AllocUtf8(opts.WatermarkText);
+                IntPtr watermarkColorPtr = AllocUtf8(opts.WatermarkColor);
+                IntPtr pageRangePtr = AllocUtf8(opts.PageRange);
+                IntPtr customFontsDirPtr = AllocUtf8(opts.CustomFontsDirectory);
+
+                Options = new NativeOptions
+                {
+                    IncludeMarkup = opts.IncludeMarkup,
+                    Comments = opts.ShowComments,
+                    Tagged = opts.TaggedPdf,
+                    Compress = opts.Compress,
+                    PaperWidthPt = opts.PaperSizePoints?.Width ?? 0f,
+                    PaperHeightPt = opts.PaperSizePoints?.Height ?? 0f,
+                    NumeralMode = (int)opts.NumeralMode,
+                    Title = titlePtr,
+                    Author = authorPtr,
+                    Password = passwordPtr,
+                    Subject = subjectPtr,
+                    Keywords = keywordsPtr,
+                    WatermarkText = watermarkTextPtr,
+                    WatermarkColor = watermarkColorPtr,
+                    WatermarkDiagonal = opts.WatermarkDiagonal,
+                    WatermarkOpacity = opts.WatermarkOpacity,
+                    PageRange = pageRangePtr,
+                    CustomFontsDir = customFontsDirPtr
+                };
+            }
+            catch
+            {
+                Dispose();
+                throw;
+            }
         }
 
-        private static IntPtr AllocUtf8(string? str)
+        private IntPtr AllocUtf8(string? str) => AllocUtf8(str, out _);
+
+        private IntPtr AllocUtf8(string? str, out int length)
         {
+            length = 0;
             if (str == null) return IntPtr.Zero;
             byte[] bytes = Encoding.UTF8.GetBytes(str);
+            length = bytes.Length;
             IntPtr mem = Marshal.AllocHGlobal(bytes.Length + 1);
+            _allocatedPointers.Add(mem);
             Marshal.Copy(bytes, 0, mem, bytes.Length);
             Marshal.WriteByte(mem, bytes.Length, 0); // null terminator
             return mem;
@@ -301,24 +411,24 @@ public static class Doc2PdfConverter
 
         public void Dispose()
         {
-            Free(ref _titlePtr);
-            Free(ref _authorPtr);
-            Free(ref _passwordPtr);
-            Free(ref _subjectPtr);
-            Free(ref _keywordsPtr);
-            Free(ref _watermarkTextPtr);
-            Free(ref _watermarkColorPtr);
-            Free(ref _pageRangePtr);
-            Free(ref _customFontsDirPtr);
-        }
-
-        private static void Free(ref IntPtr ptr)
-        {
-            if (ptr != IntPtr.Zero)
+            // Security: Zero out password memory in unmanaged heap before freeing
+            if (_passwordPtr != IntPtr.Zero && _passwordLength > 0)
             {
-                Marshal.FreeHGlobal(ptr);
-                ptr = IntPtr.Zero;
+                for (int i = 0; i < _passwordLength; i++)
+                {
+                    Marshal.WriteByte(_passwordPtr, i, 0);
+                }
             }
+
+            for (int i = 0; i < _allocatedPointers.Count; i++)
+            {
+                IntPtr ptr = _allocatedPointers[i];
+                if (ptr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(ptr);
+                }
+            }
+            _allocatedPointers.Clear();
         }
     }
 }

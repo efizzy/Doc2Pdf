@@ -477,9 +477,10 @@
                 </label>
             </div>
 
+            <form id="converterForm" onsubmit="event.preventDefault(); convertDocument();">
             <div class="form-group">
                 <label class="form-label" for="passwordInput">Password (Optional)</label>
-                <input type="password" id="passwordInput" class="form-input" placeholder="For encrypted Word documents">
+                <input type="password" id="passwordInput" class="form-input" placeholder="For encrypted Word documents" autocomplete="current-password">
             </div>
 
             <!-- Enterprise PDF Features -->
@@ -525,10 +526,11 @@
 
             <div class="error-banner" id="errorBanner"></div>
 
-            <button type="button" class="btn-convert" id="convertBtn" onclick="convertDocument()">
+            <button type="submit" class="btn-convert" id="convertBtn">
                 <div class="spinner" id="spinner"></div>
                 <span id="convertBtnText">Convert to PDF</span>
             </button>
+            </form>
         </div>
 
         <!-- Right: Live PDF Preview & Performance Stats -->
