@@ -12,7 +12,7 @@
     <Title>Efizzy.Doc2Pdf</Title>
     <AssemblyName>Efizzy.Doc2Pdf</AssemblyName>
     <RootNamespace>Efizzy.Doc2Pdf</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>Efizzy</Authors>
     <Company>Efizzy</Company>
     <Product>Efizzy.Doc2Pdf</Product>
@@ -23,6 +23,12 @@
     <PackageProjectUrl>https://github.com/efizzy/Doc2Pdf</PackageProjectUrl>
     <RepositoryUrl>https://github.com/efizzy/Doc2Pdf</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>Release 1.1.0:
+- Feature: Automatic format resolution via magic byte inspection (DocumentFormat.Auto).
+- Security: Zero-trust defense intercepting disguised executables (PE, ELF, Mach-O, LNK, scripts, CHM).
+- Security: Path traversal protection, null-byte sanitization, and cryptographic unmanaged password zeroing.
+- Performance: Zero-allocation cached format pointers, zero-allocation ASCII sniffing, and zero-copy MemoryStream conversions.
+- Engine: Streamlined native CSS preprocessor and standards-compliant HTML5 DOCTYPE handling.</PackageReleaseNotes>
     
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

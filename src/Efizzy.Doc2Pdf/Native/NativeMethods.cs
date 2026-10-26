@@ -111,7 +111,7 @@ internal static class NativeMethods
     public static unsafe string GetVersion()
     {
         IntPtr ptr = doc2pdf_version();
-        if (ptr == IntPtr.Zero) return "1.0.0";
+        if (ptr == IntPtr.Zero) return "1.1.0";
         byte* p = (byte*)ptr;
         int len = 0;
         while (p[len] != 0) len++;

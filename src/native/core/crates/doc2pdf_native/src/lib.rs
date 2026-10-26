@@ -847,7 +847,7 @@ pub unsafe extern "C" fn word2pdf_is_format_supported(ext: *const c_char) -> c_i
 /// Returns library version string.
 #[unsafe(no_mangle)]
 pub extern "C" fn doc2pdf_version() -> *const c_char {
-    c"1.0.0".as_ptr()
+    c"1.1.0".as_ptr()
 }
 
 /// Backwards compatibility alias for `doc2pdf_version`.
