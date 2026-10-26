@@ -88,7 +88,8 @@ for (int i = 2; i < args.Length; i++)
 
 try
 {
-    Console.WriteLine($"Converting '{inputPath}' -> '{outputPath}'...");
+    var detectedFormat = DocumentFormatExtensions.DetectFormatFromFile(inputPath);
+    Console.WriteLine($"Converting '{inputPath}' ({detectedFormat}) -> '{outputPath}'...");
     var options = new Doc2PdfOptions
     {
         IncludeMarkup = markup,

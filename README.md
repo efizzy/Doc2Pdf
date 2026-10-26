@@ -18,7 +18,7 @@ Powered by native in-process engine written in pure Rust extracted from [WordCra
   - **LaTeX:** `.tex`, `.latex`, `.ltx`
   - **Plain Text:** `.txt`, `.text` (auto-detects UTF-8, UTF-16, Win-1252 encodings)
   - **Word XML:** Flat OPC and WordprocessingML 2003 `.xml`
-  - **Efizzy AST:** `.json`, `.doc.json`
+  - **AST:** `.json`, `.doc.json`
 - **High-Quality PDF Output:**
   - Real, selectable text with embedded font subsets.
   - Full layout fidelity: tables, margins, alignments, headers, footers, footnotes, images, and vector drawings.
@@ -26,7 +26,8 @@ Powered by native in-process engine written in pure Rust extracted from [WordCra
   - Optional accessibility: Tagged PDF structure tree (PDF/UA best effort).
   - Review markup: Show tracked changes (insertions/deletions) and comment balloons in the margins.
   - Paper sizing: Scale to standard sizes (Letter, A4, Legal, A3, A5) or retain original document geometry.
-- **Enterprise Features:**
+- **Enterprise & Security Features:**
+  - **Zero-Trust Magic Byte & Header Validation:** Auto-detects authentic file types by inspecting binary header magic bytes rather than blindly trusting file extensions. Automatically intercepts and rejects disguised malicious binaries (Windows PE/MZ executables, Linux ELF, macOS Mach-O, Java bytecode, Windows LNK shortcuts, and Unix shebang scripts) with error code `-403` before any native parsing or execution occurs.
   - **Dynamic Watermarking:** Diagonal or horizontal customizable watermarks (text, hex color, opacity).
   - **Page Range Filtering:** Selectively render specific pages (e.g. `"1-3, 5"`).
   - **Custom Fonts Directory:** Load and catalog custom `.ttf`, `.otf`, `.ttc` fonts on the fly.
@@ -75,6 +76,14 @@ byte[] docxBytes = File.ReadAllBytes("Document.docx");
 // Convert bytes directly in memory
 byte[] pdfBytes = Doc2PdfConverter.Convert(docxBytes, DocumentFormat.Docx);
 File.WriteAllBytes("Document.pdf", pdfBytes);
+
+// In-memory conversion with zero-trust automatic header byte detection
+byte[] autoBytes = File.ReadAllBytes("UploadedDocument"); // Format auto-detected from magic bytes
+byte[] autoPdf = Doc2PdfConverter.Convert(autoBytes, DocumentFormat.Auto);
+
+// Programmatically inspect authentic header format
+DocumentFormat detected = DocumentFormatExtensions.DetectFormat(autoBytes);
+Console.WriteLine($"Authentic format from magic bytes: {detected}");
 
 // Stream-to-stream conversion (ideal for ASP.NET Core Web APIs)
 using var inputStream = File.OpenRead("Notes.md");

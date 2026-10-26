@@ -118,9 +118,26 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
         inputBytes = ms.ToArray();
     }
 
-    string ext = Path.GetExtension(file.FileName).TrimStart('.').ToLowerInvariant();
-    if (string.IsNullOrEmpty(ext))
-        ext = "docx";
+    // Securely inspect file header bytes to determine authentic format and reject malicious binaries
+    DocumentFormat detectedFormat;
+    try
+    {
+        detectedFormat = DocumentFormatExtensions.DetectFormat(inputBytes, file.FileName);
+    }
+    catch (Doc2PdfException secEx) when (secEx.StatusCode == -403 || secEx.Message.Contains("Security validation rejected"))
+    {
+        return Results.Problem(
+            detail: secEx.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Dangerous or Malicious File Rejected");
+    }
+    catch (Doc2PdfException fmtEx)
+    {
+        return Results.Problem(
+            detail: fmtEx.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Unsupported Document Header");
+    }
 
     var options = new Doc2PdfOptions
     {
@@ -151,7 +168,7 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
     var sw = Stopwatch.StartNew();
     try
     {
-        byte[] pdfBytes = Doc2PdfConverter.Convert(inputBytes, ext, options);
+        byte[] pdfBytes = Doc2PdfConverter.Convert(inputBytes, detectedFormat, options);
         sw.Stop();
 
         string rawName = Path.GetFileNameWithoutExtension(file.FileName);
@@ -163,6 +180,7 @@ app.MapPost("/api/convert", async (HttpRequest request) =>
         string outName = safeName + ".pdf";
 
         request.HttpContext.Response.Headers["X-Conversion-Time-Ms"] = sw.ElapsedMilliseconds.ToString();
+        request.HttpContext.Response.Headers["X-Detected-Format"] = detectedFormat.ToString();
         request.HttpContext.Response.Headers["X-Input-Bytes"] = inputBytes.Length.ToString();
         request.HttpContext.Response.Headers["X-Output-Bytes"] = pdfBytes.Length.ToString();
 

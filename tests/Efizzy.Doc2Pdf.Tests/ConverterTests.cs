@@ -247,4 +247,155 @@ public class ConverterTests
             Assert.Equal("libdoc2pdf_native.so", libName);
         }
     }
+
+    [Fact]
+    public void DocumentFormat_DetectFormat_MagicBytes_IdentifiesStructuredFormats()
+    {
+        // RTF magic bytes {\rtf
+        byte[] rtfBytes = Encoding.ASCII.GetBytes("{\\rtf1\\ansi Hello world}");
+        Assert.Equal(DocumentFormat.Rtf, DocumentFormatExtensions.DetectFormat(rtfBytes));
+
+        // Legacy DOC magic bytes
+        byte[] docBytes = new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0x00, 0x00 };
+        Assert.Equal(DocumentFormat.Doc, DocumentFormatExtensions.DetectFormat(docBytes));
+
+        // ZIP DOCX magic bytes (standard PK 03 04)
+        byte[] docxBytes = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00 };
+        Assert.Equal(DocumentFormat.Docx, DocumentFormatExtensions.DetectFormat(docxBytes));
+
+        // HTML text header
+        byte[] htmlBytes = Encoding.UTF8.GetBytes("<!DOCTYPE html><html><body><h1>Title</h1></body></html>");
+        Assert.Equal(DocumentFormat.Html, DocumentFormatExtensions.DetectFormat(htmlBytes));
+
+        // Markdown text header
+        byte[] mdBytes = Encoding.UTF8.GetBytes("# Markdown Heading\n\nContent paragraph with **bold** text.");
+        Assert.Equal(DocumentFormat.Markdown, DocumentFormatExtensions.DetectFormat(mdBytes));
+
+        // JSON AST header
+        byte[] jsonBytes = Encoding.UTF8.GetBytes("{\n  \"version\": 1,\n  \"body\": []\n}");
+        Assert.Equal(DocumentFormat.Json, DocumentFormatExtensions.DetectFormat(jsonBytes));
+
+        // LaTeX header
+        byte[] texBytes = Encoding.UTF8.GetBytes("\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}");
+        Assert.Equal(DocumentFormat.Latex, DocumentFormatExtensions.DetectFormat(texBytes));
+
+        // PlainText
+        byte[] txtBytes = Encoding.UTF8.GetBytes("Just plain text notes without markdown or html.");
+        Assert.Equal(DocumentFormat.PlainText, DocumentFormatExtensions.DetectFormat(txtBytes));
+    }
+
+    [Fact]
+    public void Security_ValidateSafety_WindowsExecutable_ThrowsDoc2PdfException()
+    {
+        // Simulated Windows PE executable header starting with MZ (0x4D, 0x5A)
+        byte[] peBytes = new byte[] { 0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00 };
+
+        var ex = Assert.Throws<Doc2PdfException>(() => DocumentFormatExtensions.ValidateSafety(peBytes, "malicious.docx"));
+        Assert.Equal(-403, ex.StatusCode);
+        Assert.Contains("Security validation rejected", ex.Message);
+        Assert.Contains("MZ", ex.Message);
+    }
+
+    [Fact]
+    public void Security_ValidateSafety_LinuxElf_ThrowsDoc2PdfException()
+    {
+        // Simulated ELF executable starting with \x7FELF
+        byte[] elfBytes = new byte[] { 0x7F, (byte)'E', (byte)'L', (byte)'F', 0x02, 0x01, 0x01, 0x00 };
+
+        var ex = Assert.Throws<Doc2PdfException>(() => DocumentFormatExtensions.ValidateSafety(elfBytes, "malicious.bin"));
+        Assert.Equal(-403, ex.StatusCode);
+        Assert.Contains("ELF", ex.Message);
+    }
+
+    [Fact]
+    public void Security_ValidateSafety_MachO_ThrowsDoc2PdfException()
+    {
+        // Simulated Mach-O 64-bit binary
+        byte[] machoBytes = new byte[] { 0xFE, 0xED, 0xFA, 0xCF, 0x00, 0x00, 0x00, 0x01 };
+
+        var ex = Assert.Throws<Doc2PdfException>(() => DocumentFormatExtensions.ValidateSafety(machoBytes, "payload.dylib"));
+        Assert.Equal(-403, ex.StatusCode);
+        Assert.Contains("Mach-O", ex.Message);
+    }
+
+    [Fact]
+    public void Security_ValidateSafety_UnixShebang_ThrowsDoc2PdfException()
+    {
+        byte[] scriptBytes = Encoding.UTF8.GetBytes("#!/bin/bash\nrm -rf /");
+
+        var ex = Assert.Throws<Doc2PdfException>(() => DocumentFormatExtensions.ValidateSafety(scriptBytes, "exploit.sh"));
+        Assert.Equal(-403, ex.StatusCode);
+        Assert.Contains("Unix shebang", ex.Message);
+    }
+
+    [Fact]
+    public void Security_ValidateSafety_WindowsShortcut_ThrowsDoc2PdfException()
+    {
+        byte[] lnkBytes = new byte[] { 0x4C, 0x00, 0x00, 0x00, 0x01, 0x14, 0x02, 0x00, 0x00, 0x00 };
+
+        var ex = Assert.Throws<Doc2PdfException>(() => DocumentFormatExtensions.ValidateSafety(lnkBytes, "shortcut.lnk"));
+        Assert.Equal(-403, ex.StatusCode);
+        Assert.Contains("Shell Link", ex.Message);
+    }
+
+    [Fact]
+    public void Convert_DisguisedExecutable_ThrowsSecurityException()
+    {
+        // Disguised executable passed with "docx" format hint
+        byte[] fakeDocx = new byte[] { 0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00 };
+
+        var ex = Assert.Throws<Doc2PdfException>(() => Doc2PdfConverter.Convert(fakeDocx, "docx"));
+        Assert.Equal(-403, ex.StatusCode);
+    }
+
+    [Fact]
+    public void Convert_DisguisedRtfWithDocxExtension_ConvertsSuccessfullyUsingHeaderBytes()
+    {
+        // RTF content mistakenly given a "docx" format hint
+        string rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\f0\\fs24 Header-detected RTF document.\\par}";
+        byte[] rtfBytes = Encoding.ASCII.GetBytes(rtf);
+
+        // Should detect it as RTF and convert without throwing
+        byte[] pdfBytes = Doc2PdfConverter.Convert(rtfBytes, "docx");
+        Assert.NotNull(pdfBytes);
+        Assert.True(pdfBytes.Length > 100);
+        string header = Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(pdfBytes.Length, 8));
+        Assert.StartsWith("%PDF-", header);
+    }
+
+    [Fact]
+    public void Convert_DocumentFormatAuto_AutoDetectsFromHeaderBytes()
+    {
+        string md = "# Automatic Detection Test\n\nTesting Auto format from header bytes.";
+        byte[] mdBytes = Encoding.UTF8.GetBytes(md);
+
+        byte[] pdfBytes = Doc2PdfConverter.Convert(mdBytes, DocumentFormat.Auto);
+        Assert.NotNull(pdfBytes);
+        Assert.True(pdfBytes.Length > 100);
+        string header = Encoding.ASCII.GetString(pdfBytes, 0, Math.Min(pdfBytes.Length, 8));
+        Assert.StartsWith("%PDF-", header);
+    }
+
+    [Fact]
+    public void ConvertFile_DisguisedExecutable_RejectsBeforeExecution()
+    {
+        string tempFile = Path.Combine(Path.GetTempPath(), $"malicious_test_{Guid.NewGuid():N}.docx");
+        string tempOutPdf = Path.Combine(Path.GetTempPath(), $"out_{Guid.NewGuid():N}.pdf");
+
+        try
+        {
+            // Write MZ executable header disguised as .docx
+            byte[] fakePe = new byte[] { 0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00 };
+            File.WriteAllBytes(tempFile, fakePe);
+
+            var ex = Assert.Throws<Doc2PdfException>(() => Doc2PdfConverter.ConvertFile(tempFile, tempOutPdf));
+            Assert.Equal(-403, ex.StatusCode);
+            Assert.False(File.Exists(tempOutPdf));
+        }
+        finally
+        {
+            if (File.Exists(tempFile)) File.Delete(tempFile);
+            if (File.Exists(tempOutPdf)) File.Delete(tempOutPdf);
+        }
+    }
 }

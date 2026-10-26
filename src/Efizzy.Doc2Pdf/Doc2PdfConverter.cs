@@ -11,18 +11,20 @@ namespace Efizzy.Doc2Pdf;
 /// <summary>
 /// High-performance, cross-platform document to PDF converter.
 /// Converts Word documents (.docx, .doc), Markdown (.md), HTML, RTF, ODT, LaTeX, XML and plain text directly to PDF.
+/// Validates file header magic bytes to prevent executing malicious or spoofed files.
 /// </summary>
 public static class Doc2PdfConverter
 {
     /// <summary>
     /// Converts a document file on disk directly into a PDF file on disk.
+    /// Safely inspects the file header bytes to prevent executing malicious files and resolve authentic document format.
     /// </summary>
     /// <param name="inputPath">Path to the source document.</param>
     /// <param name="outputPath">Destination path for the output PDF.</param>
     /// <param name="options">Optional conversion configuration.</param>
     /// <exception cref="ArgumentNullException">Thrown if inputPath or outputPath is null or whitespace.</exception>
     /// <exception cref="FileNotFoundException">Thrown if the input file does not exist.</exception>
-    /// <exception cref="Doc2PdfException">Thrown if the native conversion fails.</exception>
+    /// <exception cref="Doc2PdfException">Thrown if the file is malicious or native conversion fails.</exception>
     public static unsafe void ConvertFile(string inputPath, string outputPath, Doc2PdfOptions? options = null)
     {
         if (string.IsNullOrWhiteSpace(inputPath))
@@ -32,6 +34,9 @@ public static class Doc2PdfConverter
         if (!File.Exists(inputPath))
             throw new FileNotFoundException("Input document file was not found.", inputPath);
 
+        // Security check & format detection from header bytes
+        DocumentFormat detectedFormat = DocumentFormatExtensions.DetectFormatFromFile(inputPath);
+
         string? outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
         if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir))
         {
@@ -39,19 +44,43 @@ public static class Doc2PdfConverter
         }
 
         options ??= Doc2PdfOptions.Default;
-        using var nativeOptsScope = new NativeOptionsScope(options);
-        using var inPathScope = new Utf8Scope(inputPath);
-        using var outPathScope = new Utf8Scope(outputPath);
 
-        int status = NativeMethods.doc2pdf_convert_file(
-            inPathScope.Pointer,
-            outPathScope.Pointer,
-            in nativeOptsScope.Options);
+        // If the file extension matches the detected format hint or is HTML (where base_dir is needed),
+        // we can use native file-to-file conversion. Otherwise, if the extension is misleading, missing,
+        // or contradicts the detected format header, convert using buffer to preserve exact detected format.
+        string ext = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
+        string detectedHint = detectedFormat.ToFormatHint();
 
-        if (status != 0)
+        if (string.Equals(ext, detectedHint, StringComparison.OrdinalIgnoreCase) ||
+            (detectedFormat == DocumentFormat.Docx && (ext == "docm" || ext == "dotx" || ext == "dotm")) ||
+            (detectedFormat == DocumentFormat.Doc && ext == "dot") ||
+            (detectedFormat == DocumentFormat.Html && (ext == "htm" || ext == "xhtml")) ||
+            (detectedFormat == DocumentFormat.Markdown && ext == "markdown") ||
+            (detectedFormat == DocumentFormat.PlainText && ext == "text") ||
+            (detectedFormat == DocumentFormat.Latex && (ext == "latex" || ext == "ltx")))
         {
-            string error = NativeMethods.GetLastError();
-            throw new Doc2PdfException($"PDF conversion failed for '{inputPath}': {error}", status);
+            using var nativeOptsScope = new NativeOptionsScope(options);
+            using var inPathScope = new Utf8Scope(inputPath);
+            using var outPathScope = new Utf8Scope(outputPath);
+
+            int status = NativeMethods.doc2pdf_convert_file(
+                inPathScope.Pointer,
+                outPathScope.Pointer,
+                in nativeOptsScope.Options);
+
+            if (status != 0)
+            {
+                string error = NativeMethods.GetLastError();
+                throw new Doc2PdfException($"PDF conversion failed for '{inputPath}': {error}", status);
+            }
+        }
+        else
+        {
+            // Format contradicted the extension or extension was missing/disguised:
+            // Convert using in-memory buffer with the authentically detected format
+            byte[] inBytes = File.ReadAllBytes(inputPath);
+            byte[] outBytes = Convert(inBytes, detectedHint, options);
+            File.WriteAllBytes(outputPath, outBytes);
         }
     }
 
@@ -69,23 +98,30 @@ public static class Doc2PdfConverter
 
     /// <summary>
     /// Converts in-memory document bytes to PDF bytes.
+    /// Inspects file header magic bytes to detect authentic format and reject malicious executable binaries.
     /// </summary>
     /// <param name="inputBytes">Raw document bytes.</param>
-    /// <param name="formatHint">Format hint (e.g. "docx", "md", "html", "rtf", "odt", "txt").</param>
+    /// <param name="formatHint">Optional format hint (e.g. "auto", "docx", "md", "html", "rtf", "odt", "txt").</param>
     /// <param name="options">Optional conversion configuration.</param>
     /// <returns>Rendered PDF bytes.</returns>
     /// <exception cref="ArgumentException">Thrown if inputBytes is null or empty.</exception>
-    /// <exception cref="Doc2PdfException">Thrown if the native conversion fails or output exceeds maximum buffer bounds.</exception>
-    public static unsafe byte[] Convert(byte[] inputBytes, string formatHint = "docx", Doc2PdfOptions? options = null)
+    /// <exception cref="Doc2PdfException">Thrown if the file is malicious or the native conversion fails.</exception>
+    public static unsafe byte[] Convert(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null)
     {
         if (inputBytes == null || inputBytes.Length == 0)
             throw new ArgumentException("Input buffer cannot be null or empty.", nameof(inputBytes));
 
+        // 1. Mandatory security check: inspect header bytes to prevent executing malicious files
+        DocumentFormatExtensions.ValidateSafety(inputBytes);
+
+        // 2. Detect authentic format from file header bytes
+        DocumentFormat detectedFormat = DocumentFormatExtensions.DetectFormat(inputBytes, formatHint);
+        string resolvedFormatHint = detectedFormat.ToFormatHint();
+
         options ??= Doc2PdfOptions.Default;
-        formatHint = string.IsNullOrWhiteSpace(formatHint) ? "docx" : formatHint;
 
         using var nativeOptsScope = new NativeOptionsScope(options);
-        using var formatScope = new Utf8Scope(formatHint);
+        using var formatScope = new Utf8Scope(resolvedFormatHint);
 
         fixed (byte* inPtr = inputBytes)
         {
@@ -139,13 +175,23 @@ public static class Doc2PdfConverter
     /// </summary>
     public static byte[] Convert(byte[] inputBytes, DocumentFormat format, Doc2PdfOptions? options = null)
     {
-        return Convert(inputBytes, format.ToFormatHint(), options);
+        if (format == DocumentFormat.Auto)
+        {
+            return Convert(inputBytes, "auto", options);
+        }
+
+        // Even if a specific format is specified, validate safety against malicious headers
+        DocumentFormatExtensions.ValidateSafety(inputBytes);
+
+        // Header detection takes precedence over mismatched format hint
+        DocumentFormat detected = DocumentFormatExtensions.DetectFormat(inputBytes, format.ToFormatHint());
+        return Convert(inputBytes, detected.ToFormatHint(), options);
     }
 
     /// <summary>
     /// Asynchronously converts in-memory document bytes to PDF bytes.
     /// </summary>
-    public static Task<byte[]> ConvertAsync(byte[] inputBytes, string formatHint = "docx", Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
+    public static Task<byte[]> ConvertAsync(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
@@ -156,8 +202,9 @@ public static class Doc2PdfConverter
 
     /// <summary>
     /// Converts a document stream into a PDF output stream.
+    /// Inspects file header magic bytes to detect authentic format and reject malicious binaries.
     /// </summary>
-    public static void Convert(Stream inputStream, Stream outputStream, string formatHint = "docx", Doc2PdfOptions? options = null)
+    public static void Convert(Stream inputStream, Stream outputStream, string formatHint = "auto", Doc2PdfOptions? options = null)
     {
         if (inputStream == null) throw new ArgumentNullException(nameof(inputStream));
         if (outputStream == null) throw new ArgumentNullException(nameof(outputStream));
@@ -291,7 +338,7 @@ public static class Word2PdfConverter
         => Doc2PdfConverter.ConvertFileAsync(inputPath, outputPath, options, cancellationToken);
 
     /// <summary>Converts document bytes to PDF bytes.</summary>
-    public static byte[] Convert(byte[] inputBytes, string formatHint = "docx", Doc2PdfOptions? options = null)
+    public static byte[] Convert(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null)
         => Doc2PdfConverter.Convert(inputBytes, formatHint, options);
 
     /// <summary>Converts document bytes to PDF bytes with format enum.</summary>
@@ -299,11 +346,11 @@ public static class Word2PdfConverter
         => Doc2PdfConverter.Convert(inputBytes, format, options);
 
     /// <summary>Asynchronously converts document bytes to PDF bytes.</summary>
-    public static Task<byte[]> ConvertAsync(byte[] inputBytes, string formatHint = "docx", Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
+    public static Task<byte[]> ConvertAsync(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
         => Doc2PdfConverter.ConvertAsync(inputBytes, formatHint, options, cancellationToken);
 
     /// <summary>Converts a document stream to a PDF stream.</summary>
-    public static void Convert(Stream inputStream, Stream outputStream, string formatHint = "docx", Doc2PdfOptions? options = null)
+    public static void Convert(Stream inputStream, Stream outputStream, string formatHint = "auto", Doc2PdfOptions? options = null)
         => Doc2PdfConverter.Convert(inputStream, outputStream, formatHint, options);
 
     /// <summary>Checks if a format extension is supported.</summary>
