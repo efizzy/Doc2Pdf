@@ -21,7 +21,6 @@ efizzy-geom = { workspace = true }
 efizzy-fonts = { workspace = true }
 efizzy-layout = { workspace = true }
 efizzy-pdf = { workspace = true }
-efizzy-engine = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 css-inline = { version = "0.23", default-features = false }

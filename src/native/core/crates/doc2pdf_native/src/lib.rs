@@ -10,6 +10,8 @@ use std::os::raw::{c_char, c_int};
 use std::panic::catch_unwind;
 use std::path::Path;
 
+mod loader;
+
 thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
 }
@@ -514,9 +516,9 @@ pub unsafe extern "C" fn doc2pdf_convert_buffer(
             }
         }
 
-        // Open document using Efizzy engine's unified format loader
-        let (mut doc, _encrypted) = efizzy_engine::io::open_bytes_with(
-            &format!("document.{ext}"),
+        // Open document using streamlined native format loader
+        let (mut doc, _encrypted) = loader::open_bytes_with(
+            &ext,
             final_bytes,
             password,
         )?;

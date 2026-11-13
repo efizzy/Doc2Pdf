@@ -80,8 +80,10 @@ debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3
-lto = "thin"
-codegen-units = 16
+lto = true
+codegen-units = 1
+panic = "unwind"
+strip = true
 debug = 0
 
 [patch.crates-io]
