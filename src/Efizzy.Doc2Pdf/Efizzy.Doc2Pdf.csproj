@@ -12,7 +12,7 @@
     <Title>Efizzy.Doc2Pdf</Title>
     <AssemblyName>Efizzy.Doc2Pdf</AssemblyName>
     <RootNamespace>Efizzy.Doc2Pdf</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Authors>Efizzy</Authors>
     <Company>Efizzy</Company>
     <Product>Efizzy.Doc2Pdf</Product>
@@ -23,7 +23,11 @@
     <PackageProjectUrl>https://github.com/efizzy/Doc2Pdf</PackageProjectUrl>
     <RepositoryUrl>https://github.com/efizzy/Doc2Pdf</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>Release 1.1.0:
+    <PackageReleaseNotes>Release 1.1.1:
+- Performance &amp; Size: Decoupled desktop engine dependencies and enabled Link-Time Optimization (LTO) dead code elimination, reducing native binary footprint by ~16%.
+- Native Engine: Introduced modular dynamic loader for native rendering components.
+
+Release 1.1.0:
 - Feature: Automatic format resolution via magic byte inspection (DocumentFormat.Auto).
 - Security: Zero-trust defense intercepting disguised executables (PE, ELF, Mach-O, LNK, scripts, CHM).
 - Security: Path traversal protection, null-byte sanitization, and cryptographic unmanaged password zeroing.
