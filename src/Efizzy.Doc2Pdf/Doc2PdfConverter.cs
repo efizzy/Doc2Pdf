@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Efizzy;
 using Efizzy.Doc2Pdf.Native;
 
 namespace Efizzy.Doc2Pdf;
@@ -123,6 +124,7 @@ public static class Doc2PdfConverter
     /// <returns>Rendered PDF bytes.</returns>
     /// <exception cref="ArgumentException">Thrown if inputBytes is null, empty, or exceeds allowable size bounds.</exception>
     /// <exception cref="Doc2PdfException">Thrown if the file is malicious or the native conversion fails.</exception>
+    [Obsolete("Use Convert(byte[], DocumentFormat, Doc2PdfOptions) or Convert(byte[], Format, Doc2PdfOptions) instead.")]
     public static unsafe byte[] Convert(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null)
     {
         if (inputBytes == null || inputBytes.Length == 0)
@@ -191,6 +193,12 @@ public static class Doc2PdfConverter
     }
 
     /// <summary>
+    /// Converts in-memory document bytes using a strongly typed <see cref="Format"/>.
+    /// </summary>
+    public static byte[] Convert(byte[] inputBytes, Format format, Doc2PdfOptions? options = null)
+        => Convert(inputBytes, (DocumentFormat)format, options);
+
+    /// <summary>
     /// Converts in-memory document bytes using a strongly typed <see cref="DocumentFormat"/>.
     /// </summary>
     public static byte[] Convert(byte[] inputBytes, DocumentFormat format, Doc2PdfOptions? options = null)
@@ -209,9 +217,28 @@ public static class Doc2PdfConverter
     }
 
     /// <summary>
+    /// Asynchronously converts in-memory document bytes to PDF bytes using <see cref="DocumentFormat"/>.
+    /// </summary>
+    public static Task<byte[]> ConvertAsync(byte[] inputBytes, DocumentFormat format = DocumentFormat.Auto, Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Convert(inputBytes, format, options);
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously converts in-memory document bytes to PDF bytes using <see cref="Format"/>.
+    /// </summary>
+    public static Task<byte[]> ConvertAsync(byte[] inputBytes, Format format, Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
+        => ConvertAsync(inputBytes, (DocumentFormat)format, options, cancellationToken);
+
+    /// <summary>
     /// Asynchronously converts in-memory document bytes to PDF bytes.
     /// </summary>
-    public static Task<byte[]> ConvertAsync(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
+    [Obsolete("Use ConvertAsync(byte[], DocumentFormat, Doc2PdfOptions, CancellationToken) instead.")]
+    public static Task<byte[]> ConvertAsync(byte[] inputBytes, string formatHint, Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
@@ -221,11 +248,9 @@ public static class Doc2PdfConverter
     }
 
     /// <summary>
-    /// Converts a document stream into a PDF output stream.
-    /// Inspects file header magic bytes to detect authentic format and reject malicious binaries.
-    /// Minimizes memory buffer duplication when reading from memory streams.
+    /// Converts a document stream into a PDF output stream using <see cref="DocumentFormat"/>.
     /// </summary>
-    public static void Convert(Stream inputStream, Stream outputStream, string formatHint = "auto", Doc2PdfOptions? options = null)
+    public static void Convert(Stream inputStream, Stream outputStream, DocumentFormat format = DocumentFormat.Auto, Doc2PdfOptions? options = null)
     {
         if (inputStream == null) throw new ArgumentNullException(nameof(inputStream));
         if (outputStream == null) throw new ArgumentNullException(nameof(outputStream));
@@ -249,9 +274,22 @@ public static class Doc2PdfConverter
             inputBytes = tempMs.ToArray();
         }
 
-        byte[] pdfBytes = Convert(inputBytes, formatHint, options);
+        byte[] pdfBytes = Convert(inputBytes, format, options);
         outputStream.Write(pdfBytes, 0, pdfBytes.Length);
     }
+
+    /// <summary>
+    /// Converts a document stream into a PDF output stream using <see cref="Format"/>.
+    /// </summary>
+    public static void Convert(Stream inputStream, Stream outputStream, Format format, Doc2PdfOptions? options = null)
+        => Convert(inputStream, outputStream, (DocumentFormat)format, options);
+
+    /// <summary>
+    /// Converts a document stream into a PDF output stream.
+    /// </summary>
+    [Obsolete("Use Convert(Stream, Stream, DocumentFormat, Doc2PdfOptions) instead.")]
+    public static void Convert(Stream inputStream, Stream outputStream, string formatHint, Doc2PdfOptions? options = null)
+        => Convert(inputStream, outputStream, DocumentFormatExtensions.FromPathOrExtension(formatHint), options);
 
     /// <summary>
     /// Checks whether the native library supports conversion for the given file extension.

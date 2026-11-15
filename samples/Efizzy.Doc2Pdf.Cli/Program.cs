@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading;
+using Efizzy;
 using Efizzy.Doc2Pdf;
 
 Console.WriteLine("========================================");
@@ -21,6 +22,7 @@ if (args.Length < 2)
     Console.WriteLine("Usage: Efizzy.Doc2Pdf.Cli <input-file> <output-file.pdf> [options]");
     Console.WriteLine("       Efizzy.Doc2Pdf.Cli --benchmark");
     Console.WriteLine("Options:");
+    Console.WriteLine("  --format <format>         Explicit document format (docx, md, html, rtf, odt, tex, txt)");
     Console.WriteLine("  --markup                  Show tracked revisions");
     Console.WriteLine("  --comments                Render comment balloons in margin");
     Console.WriteLine("  --paper A4|Letter|Legal   Scale to paper size");
@@ -41,6 +43,7 @@ string outputPath = args[1];
 
 bool markup = false;
 bool comments = false;
+Format explicitFormat = Format.Auto;
 (float Width, float Height)? paper = null;
 string? watermarkText = null;
 string? watermarkColor = null;
@@ -53,7 +56,12 @@ string? fontsDir = null;
 
 for (int i = 2; i < args.Length; i++)
 {
-    if (args[i].Equals("--markup", StringComparison.OrdinalIgnoreCase))
+    if (args[i].Equals("--format", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+    {
+        if (Enum.TryParse<Format>(args[++i], true, out var parsedFormat))
+            explicitFormat = parsedFormat;
+    }
+    else if (args[i].Equals("--markup", StringComparison.OrdinalIgnoreCase))
         markup = true;
     else if (args[i].Equals("--comments", StringComparison.OrdinalIgnoreCase))
         comments = true;
@@ -88,8 +96,13 @@ for (int i = 2; i < args.Length; i++)
 
 try
 {
-    var detectedFormat = DocumentFormatExtensions.DetectFormatFromFile(inputPath);
-    Console.WriteLine($"Converting '{inputPath}' ({detectedFormat}) -> '{outputPath}'...");
+    using var document = new Document();
+    if (explicitFormat != Format.Auto)
+        document.LoadFromFile(inputPath, explicitFormat);
+    else
+        document.LoadFromFile(inputPath);
+
+    Console.WriteLine($"Converting '{inputPath}' ({document.Format}) -> '{outputPath}'...");
     var options = new Doc2PdfOptions
     {
         IncludeMarkup = markup,
@@ -106,7 +119,7 @@ try
     };
 
     var sw = Stopwatch.StartNew();
-    Doc2PdfConverter.ConvertFile(inputPath, outputPath, options);
+    document.ConvertToPdf(outputPath, options);
     sw.Stop();
 
     var fi = new FileInfo(outputPath);
@@ -154,7 +167,8 @@ static void RunBenchmark()
 
     Console.WriteLine("\n--- 1. Cold Start Benchmarks ---");
     var sw = Stopwatch.StartNew();
-    byte[] pdf1 = Doc2PdfConverter.Convert(mdBytes, DocumentFormat.Markdown);
+    using var mdDoc = new Document(mdBytes, Format.Markdown);
+    byte[] pdf1 = mdDoc.ConvertToPdf();
     sw.Stop();
     long coldMdMs = sw.ElapsedMilliseconds;
 
@@ -164,7 +178,8 @@ static void RunBenchmark()
     Console.WriteLine($"  Working Set after cold start: {coldWorkingSet / 1024.0 / 1024.0:F2} MB");
 
     sw.Restart();
-    byte[] pdf2 = Doc2PdfConverter.Convert(htmlBytes, DocumentFormat.Html);
+    using var htmlDoc = new Document(htmlBytes, Format.Html);
+    byte[] pdf2 = htmlDoc.ConvertToPdf();
     sw.Stop();
     long coldHtmlMs = sw.ElapsedMilliseconds;
 
@@ -185,7 +200,8 @@ static void RunBenchmark()
 
     for (int i = 0; i < iterations; i++)
     {
-        _ = Doc2PdfConverter.Convert(mdBytes, DocumentFormat.Markdown);
+        using var doc = new Document(mdBytes, Format.Markdown);
+        _ = doc.ConvertToPdf();
     }
 
     sw.Stop();
@@ -212,7 +228,8 @@ static void RunBenchmark()
 
     for (int i = 0; i < htmlIterations; i++)
     {
-        _ = Doc2PdfConverter.Convert(htmlBytes, DocumentFormat.Html);
+        using var doc = new Document(htmlBytes, Format.Html);
+        _ = doc.ConvertToPdf();
     }
 
     sw.Stop();

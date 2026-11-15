@@ -48,9 +48,11 @@ Release 1.1.0:
     <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes')" />
   </ItemGroup>
 
-  <!-- MSBuild targets to copy native assets to output directory during build -->
+  <!-- MSBuild props and targets to configure implicit usings and copy native assets -->
   <ItemGroup>
+    <None Include="build\Efizzy.Doc2Pdf.props" Pack="true" PackagePath="build\Efizzy.Doc2Pdf.props" />
     <None Include="build\Efizzy.Doc2Pdf.targets" Pack="true" PackagePath="build\Efizzy.Doc2Pdf.targets" />
+    <None Include="buildTransitive\Efizzy.Doc2Pdf.props" Pack="true" PackagePath="buildTransitive\Efizzy.Doc2Pdf.props" />
     <None Include="buildTransitive\Efizzy.Doc2Pdf.targets" Pack="true" PackagePath="buildTransitive\Efizzy.Doc2Pdf.targets" />
   </ItemGroup>
 

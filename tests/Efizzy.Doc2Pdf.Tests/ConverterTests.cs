@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using Efizzy;
 using Efizzy.Doc2Pdf;
 using Xunit;
 

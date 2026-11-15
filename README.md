@@ -51,44 +51,55 @@ dotnet add package Efizzy.Doc2Pdf
 
 ## Quick Start
 
-### 1. Simple File Conversion
+### 1. Document Loading & PDF Conversion
 
 ```csharp
 using Efizzy.Doc2Pdf;
 
-// Convert a Word DOCX document to PDF
-Doc2PdfConverter.ConvertFile("Contract.docx", "Contract.pdf");
+// Load file with automatic format detection from header magic bytes
+using var doc = new Document("Contract.docx");
+doc.ConvertToPdf("Contract.pdf");
 
-// Convert a Markdown file to PDF
-Doc2PdfConverter.ConvertFile("README.md", "README.pdf");
+// Convert a Markdown file directly
+using var readme = new Document("README.md");
+readme.ConvertToPdf("README.pdf");
 
 // Convert an HTML file to PDF
-Doc2PdfConverter.ConvertFile("invoice.html", "invoice.pdf");
+using var html = new Document("invoice.html");
+html.ConvertToPdf("invoice.pdf");
 ```
 
-### 2. In-Memory Byte Array & Stream Conversion
+### 2. Parameterless Loading & Versatile Input Sources
 
 ```csharp
+using Efizzy;
 using Efizzy.Doc2Pdf;
 
-byte[] docxBytes = File.ReadAllBytes("Document.docx");
+// 1. Parameterless instantiation + LoadFromFile
+using var doc1 = new Document();
+doc1.LoadFromFile("Report.odt");
+doc1.ConvertToPdf("Report.pdf");
 
-// Convert bytes directly in memory
-byte[] pdfBytes = Doc2PdfConverter.Convert(docxBytes, DocumentFormat.Docx);
-File.WriteAllBytes("Document.pdf", pdfBytes);
+// 2. Load directly from a raw text/markup string (Markdown, HTML, RTF, etc.)
+using var doc2 = new Document();
+doc2.LoadFromString("# Direct Markdown\n\nConverted in memory.", Format.Markdown);
+byte[] pdfBytes = doc2.ConvertToPdf();
 
-// In-memory conversion with zero-trust automatic header byte detection
-byte[] autoBytes = File.ReadAllBytes("UploadedDocument"); // Format auto-detected from magic bytes
-byte[] autoPdf = Doc2PdfConverter.Convert(autoBytes, DocumentFormat.Auto);
+// 3. Load from byte array with auto format detection
+byte[] uploadedBytes = File.ReadAllBytes("mystery_document");
+using var doc3 = new Document(uploadedBytes); // Auto-detects authentic format from header bytes
+Console.WriteLine($"Authentic format: {doc3.Format}, Size: {doc3.Length} bytes");
+byte[] autoPdf = doc3.ConvertToPdf();
 
-// Programmatically inspect authentic header format
-DocumentFormat detected = DocumentFormatExtensions.DetectFormat(autoBytes);
-Console.WriteLine($"Authentic format from magic bytes: {detected}");
-
-// Stream-to-stream conversion (ideal for ASP.NET Core Web APIs)
-using var inputStream = File.OpenRead("Notes.md");
+// 4. Stream-to-Stream conversion (ideal for ASP.NET Core APIs)
+using var inputStream = File.OpenRead("Notes.docx");
 using var outputStream = File.Create("Notes.pdf");
-Doc2PdfConverter.Convert(inputStream, outputStream, formatHint: "md");
+using var streamDoc = new Document(inputStream);
+streamDoc.ConvertToPdf(outputStream);
+
+// 5. Asynchronous conversion
+using var asyncDoc = new Document("AnnualReport.docx");
+await asyncDoc.ConvertToPdfAsync("AnnualReport.pdf");
 ```
 
 ### 3. Enterprise Features (Watermarking, Page Ranges, Metadata)
@@ -126,7 +137,8 @@ var options = new Doc2PdfOptions
     Compress = true            // Compress PDF streams
 };
 
-Doc2PdfConverter.ConvertFile("AnnualAudit.docx", "AnnualAudit.pdf", options);
+using var auditDoc = new Document("AnnualAudit.docx");
+auditDoc.ConvertToPdf("AnnualAudit.pdf", options);
 ```
 
 ---

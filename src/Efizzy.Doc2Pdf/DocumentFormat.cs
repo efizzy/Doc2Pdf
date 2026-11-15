@@ -1,8 +1,9 @@
 using System;
 using System.IO;
 using System.Text;
+using Efizzy.Doc2Pdf;
 
-namespace Efizzy.Doc2Pdf;
+namespace Efizzy;
 
 /// <summary>
 /// Document formats supported by Efizzy.Doc2Pdf for conversion to PDF.
@@ -12,57 +13,119 @@ public enum DocumentFormat
     /// <summary>
     /// Automatic detection from file content signature and magic header bytes.
     /// </summary>
-    Auto,
+    Auto = 0,
 
     /// <summary>
     /// Microsoft Word 2007+ OpenXML Document (.docx, .docm, .dotx, .dotm).
     /// </summary>
-    Docx,
+    Docx = 1,
 
     /// <summary>
     /// Legacy Microsoft Word 97-2003 Binary Document (.doc, .dot).
     /// </summary>
-    Doc,
+    Doc = 2,
 
     /// <summary>
     /// Markdown document (.md, .markdown) - CommonMark with GFM tables.
     /// </summary>
-    Markdown,
+    Markdown = 3,
 
     /// <summary>
     /// HyperText Markup Language (.html, .htm, .xhtml).
     /// </summary>
-    Html,
+    Html = 4,
 
     /// <summary>
     /// Rich Text Format (.rtf).
     /// </summary>
-    Rtf,
+    Rtf = 5,
 
     /// <summary>
     /// OpenDocument Text (.odt).
     /// </summary>
-    Odt,
+    Odt = 6,
 
     /// <summary>
     /// LaTeX document (.tex, .latex, .ltx).
     /// </summary>
-    Latex,
+    Latex = 7,
 
     /// <summary>
     /// Plain text document (.txt, .text).
     /// </summary>
-    PlainText,
+    PlainText = 8,
 
     /// <summary>
     /// Word XML Document (Flat OPC or WordprocessingML 2003).
     /// </summary>
-    Xml,
+    Xml = 9,
 
     /// <summary>
     /// Efizzy Document JSON AST (.json, .doc.json).
     /// </summary>
-    Json
+    Json = 10
+}
+
+/// <summary>
+/// Document formats supported by Efizzy.Doc2Pdf for conversion to PDF.
+/// Concise alias for <see cref="DocumentFormat"/>.
+/// </summary>
+public enum Format
+{
+    /// <summary>
+    /// Automatic detection from file content signature and magic header bytes.
+    /// </summary>
+    Auto = 0,
+
+    /// <summary>
+    /// Microsoft Word 2007+ OpenXML Document (.docx, .docm, .dotx, .dotm).
+    /// </summary>
+    Docx = 1,
+
+    /// <summary>
+    /// Legacy Microsoft Word 97-2003 Binary Document (.doc, .dot).
+    /// </summary>
+    Doc = 2,
+
+    /// <summary>
+    /// Markdown document (.md, .markdown) - CommonMark with GFM tables.
+    /// </summary>
+    Markdown = 3,
+
+    /// <summary>
+    /// HyperText Markup Language (.html, .htm, .xhtml).
+    /// </summary>
+    Html = 4,
+
+    /// <summary>
+    /// Rich Text Format (.rtf).
+    /// </summary>
+    Rtf = 5,
+
+    /// <summary>
+    /// OpenDocument Text (.odt).
+    /// </summary>
+    Odt = 6,
+
+    /// <summary>
+    /// LaTeX document (.tex, .latex, .ltx).
+    /// </summary>
+    Latex = 7,
+
+    /// <summary>
+    /// Plain text document (.txt, .text).
+    /// </summary>
+    PlainText = 8,
+
+    /// <summary>
+    /// Word XML Document (Flat OPC or WordprocessingML 2003).
+    /// </summary>
+    Xml = 9,
+
+    /// <summary>
+    /// Efizzy Document JSON AST (.json, .doc.json).
+    /// </summary>
+    Json = 10
 }
 
 /// <summary>
@@ -100,6 +163,26 @@ public static class DocumentFormatExtensions
         DocumentFormat.Auto => "auto",
         _ => "docx"
     };
+
+    /// <summary>
+    /// Returns the standard format hint string passed to the native converter.
+    /// </summary>
+    public static string ToFormatHint(this Format format) => ((DocumentFormat)format).ToFormatHint();
+
+    /// <summary>
+    /// Converts a <see cref="Format"/> to a <see cref="DocumentFormat"/>.
+    /// </summary>
+    public static DocumentFormat ToDocumentFormat(this Format format) => (DocumentFormat)format;
+
+    /// <summary>
+    /// Converts a <see cref="DocumentFormat"/> to a <see cref="Format"/>.
+    /// </summary>
+    public static Format ToFormat(this DocumentFormat format) => (Format)format;
+
+    /// <summary>
+    /// Converts a file path or extension string to a <see cref="Format"/> enum.
+    /// </summary>
+    public static Format ToFormat(this string pathOrExt) => (Format)FromPathOrExtension(pathOrExt);
 
     /// <summary>
     /// Validates that the input bytes do not contain any known dangerous or executable header signatures.
@@ -339,7 +422,7 @@ public static class DocumentFormatExtensions
     public static DocumentFormat FromPathOrExtension(string pathOrExt)
     {
         if (string.IsNullOrWhiteSpace(pathOrExt))
-            return DocumentFormat.Docx;
+            return DocumentFormat.Auto;
 
         string ext = Path.GetExtension(pathOrExt).TrimStart('.').ToLowerInvariant();
         if (string.IsNullOrEmpty(ext))
@@ -357,7 +440,8 @@ public static class DocumentFormatExtensions
             "txt" or "text" => DocumentFormat.PlainText,
             "xml" => DocumentFormat.Xml,
             "json" => DocumentFormat.Json,
-            _ => DocumentFormat.Docx
+            "auto" => DocumentFormat.Auto,
+            _ => DocumentFormat.Auto
         };
     }
 
