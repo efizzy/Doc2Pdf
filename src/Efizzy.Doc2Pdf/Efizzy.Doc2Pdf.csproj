@@ -12,7 +12,7 @@
     <Title>Efizzy.Doc2Pdf</Title>
     <AssemblyName>Efizzy.Doc2Pdf</AssemblyName>
     <RootNamespace>Efizzy.Doc2Pdf</RootNamespace>
-    <Version>1.1.1</Version>
+    <Version>2.0.0</Version>
     <Authors>Efizzy</Authors>
     <Company>Efizzy</Company>
     <Product>Efizzy.Doc2Pdf</Product>
@@ -23,7 +23,14 @@
     <PackageProjectUrl>https://github.com/efizzy/Doc2Pdf</PackageProjectUrl>
     <RepositoryUrl>https://github.com/efizzy/Doc2Pdf</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>Release 1.1.1:
+    <PackageReleaseNotes>Release 2.0.0:
+- Major Architecture: Introduced object-oriented Document class (new Document(), LoadFromFile(), LoadFromBytes(), LoadFromString(), LoadFromStream(), ConvertToPdf()).
+- Namespace Redesign: Moved DocumentFormat and introduced concise Format enum directly in root Efizzy namespace.
+- Global Usings: Added automatic MSBuild build and buildTransitive props providing zero-effort global usings for consumer projects.
+- Deprecation: Deprecated legacy string-based format overloads on Doc2PdfConverter in favor of strongly-typed Format enums.
+- Performance: Retained zero-copy in-process execution, streaming architecture, and instant sub-5ms conversions.
+
+Release 1.1.1:
 - Performance &amp; Size: Decoupled desktop engine dependencies and enabled Link-Time Optimization (LTO) dead code elimination, reducing native binary footprint by ~16%.
 - Native Engine: Introduced modular dynamic loader for native rendering components.
 
@@ -48,9 +55,11 @@ Release 1.1.0:
     <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes')" />
   </ItemGroup>
 
-  <!-- MSBuild targets to copy native assets to output directory during build -->
+  <!-- MSBuild props and targets to configure implicit usings and copy native assets -->
   <ItemGroup>
+    <None Include="build\Efizzy.Doc2Pdf.props" Pack="true" PackagePath="build\Efizzy.Doc2Pdf.props" />
     <None Include="build\Efizzy.Doc2Pdf.targets" Pack="true" PackagePath="build\Efizzy.Doc2Pdf.targets" />
+    <None Include="buildTransitive\Efizzy.Doc2Pdf.props" Pack="true" PackagePath="buildTransitive\Efizzy.Doc2Pdf.props" />
     <None Include="buildTransitive\Efizzy.Doc2Pdf.targets" Pack="true" PackagePath="buildTransitive\Efizzy.Doc2Pdf.targets" />
   </ItemGroup>
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Efizzy;
 using Efizzy.Doc2Pdf;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,21 +35,19 @@ app.MapGet("/api/info", () =>
     {
         name = "Efizzy.Doc2Pdf Web Converter",
         engineVersion = Doc2PdfConverter.GetNativeVersion(),
-        supportedFormats = new[]
-        {
-            "docx", "doc", "docm", "dotx", "dotm", "xml",
-            "md", "markdown", "html", "htm", "xhtml",
-            "rtf", "odt", "tex", "latex", "txt", "json"
-        }
+        supportedFormats = Enum.GetNames<Format>().Where(f => f != nameof(Format.Auto)).ToArray()
     });
 });
 
 // Sample documents endpoint for one-click testing
 app.MapGet("/api/sample/{name}", (string name) =>
 {
-    return name.ToLowerInvariant() switch
+    if (!Enum.TryParse<Format>(name, true, out var sampleFormat))
+        return Results.NotFound();
+
+    return sampleFormat switch
     {
-        "markdown" => Results.Content(
+        Format.Markdown => Results.Content(
             "# Quarterly Business Report\n\n" +
             "Generated automatically using **Efizzy.Doc2Pdf**!\n\n" +
             "## Key Accomplishments\n" +
@@ -64,7 +63,7 @@ app.MapGet("/api/sample/{name}", (string name) =>
             "text/markdown",
             System.Text.Encoding.UTF8),
 
-        "html" => Results.Content(
+        Format.Html => Results.Content(
             "<!DOCTYPE html>\n<html><head><meta charset='utf-8'><title>HTML Invoice Sample</title>" +
             "<style>body { font-family: sans-serif; margin: 40px; color: #333; }" +
             "h1 { color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; }" +
@@ -82,7 +81,7 @@ app.MapGet("/api/sample/{name}", (string name) =>
             "text/html",
             System.Text.Encoding.UTF8),
 
-        "rtf" => Results.Content(
+        Format.Rtf => Results.Content(
             "{\\rtf1\\ansi\\deff0\n{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}{\\f1\\froman\\fcharset0 Times New Roman;}}\n" +
             "{\\colortbl ;\\red30\\green58\\blue138;\\red22\\green101\\blue52;}\n" +
             "\\f0\\fs32 \\b \\cf1 Rich Text Format Document \\cf0\\b0\\par\n" +
@@ -130,19 +129,23 @@ app.MapPost("/api/convert", async (HttpRequest request, ILoggerFactory loggerFac
     bool watermarkDiagonal = !bool.TryParse(form["watermarkDiagonal"], out bool wd) || wd;
     string? pages = form["pages"].FirstOrDefault();
 
-    // Avoid memory reallocations by pre-allocating the MemoryStream with the exact file size
-    byte[] inputBytes;
-    using (var ms = new MemoryStream((int)file.Length))
+    // Optional format hint passed as enum
+    Format requestedFormat = Format.Auto;
+    if (form.TryGetValue("format", out var formatVal) && !string.IsNullOrWhiteSpace(formatVal))
     {
-        await file.CopyToAsync(ms, cancellationToken);
-        inputBytes = ms.ToArray();
+        Enum.TryParse<Format>(formatVal.ToString(), true, out requestedFormat);
     }
 
-    // Securely inspect file header bytes to determine authentic format and reject malicious binaries
-    DocumentFormat detectedFormat;
+    // Securely load from uploaded file stream and determine authentic format
+    using var document = new Document();
     try
     {
-        detectedFormat = DocumentFormatExtensions.DetectFormat(inputBytes, file.FileName);
+        using var stream = file.OpenReadStream();
+        Format formatHint = requestedFormat != Format.Auto 
+            ? requestedFormat 
+            : file.FileName.ToFormat();
+
+        document.LoadFromStream(stream, formatHint);
     }
     catch (Doc2PdfException secEx) when (secEx.StatusCode == -403 || secEx.Message.Contains("Security validation rejected"))
     {
@@ -190,7 +193,7 @@ app.MapPost("/api/convert", async (HttpRequest request, ILoggerFactory loggerFac
     try
     {
         // Non-blocking async execution with cancellation token support (Anti-DoS)
-        byte[] pdfBytes = await Doc2PdfConverter.ConvertAsync(inputBytes, detectedFormat.ToFormatHint(), options, cancellationToken);
+        byte[] pdfBytes = await document.ConvertToPdfAsync(options, cancellationToken);
         sw.Stop();
 
         // Sanitize output filename to strictly alphanumeric, dashes, dots, and underscores to prevent header injection
@@ -200,12 +203,12 @@ app.MapPost("/api/convert", async (HttpRequest request, ILoggerFactory loggerFac
         string outName = safeName + ".pdf";
 
         request.HttpContext.Response.Headers["X-Conversion-Time-Ms"] = sw.ElapsedMilliseconds.ToString();
-        request.HttpContext.Response.Headers["X-Detected-Format"] = detectedFormat.ToString();
-        request.HttpContext.Response.Headers["X-Input-Bytes"] = inputBytes.Length.ToString();
+        request.HttpContext.Response.Headers["X-Detected-Format"] = document.Format.ToString();
+        request.HttpContext.Response.Headers["X-Input-Bytes"] = document.Length.ToString();
         request.HttpContext.Response.Headers["X-Output-Bytes"] = pdfBytes.Length.ToString();
 
         logger.LogInformation("Converted '{FileName}' ({Format}) -> '{OutName}' ({Bytes:N0} bytes) in {Ms} ms",
-            file.FileName, detectedFormat, outName, pdfBytes.Length, sw.ElapsedMilliseconds);
+            file.FileName, document.Format, outName, pdfBytes.Length, sw.ElapsedMilliseconds);
 
         return Results.File(pdfBytes, "application/pdf", outName, enableRangeProcessing: true);
     }
