@@ -12,7 +12,7 @@
     <Title>Efizzy.Doc2Pdf</Title>
     <AssemblyName>Efizzy.Doc2Pdf</AssemblyName>
     <RootNamespace>Efizzy.Doc2Pdf</RootNamespace>
-    <Version>1.1.1</Version>
+    <Version>2.0.0</Version>
     <Authors>Efizzy</Authors>
     <Company>Efizzy</Company>
     <Product>Efizzy.Doc2Pdf</Product>
@@ -23,7 +23,14 @@
     <PackageProjectUrl>https://github.com/efizzy/Doc2Pdf</PackageProjectUrl>
     <RepositoryUrl>https://github.com/efizzy/Doc2Pdf</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>Release 1.1.1:
+    <PackageReleaseNotes>Release 2.0.0:
+- Major Architecture: Introduced object-oriented Document class (new Document(), LoadFromFile(), LoadFromBytes(), LoadFromString(), LoadFromStream(), ConvertToPdf()).
+- Namespace Redesign: Moved DocumentFormat and introduced concise Format enum directly in root Efizzy namespace.
+- Global Usings: Added automatic MSBuild build and buildTransitive props providing zero-effort global usings for consumer projects.
+- Deprecation: Deprecated legacy string-based format overloads on Doc2PdfConverter in favor of strongly-typed Format enums.
+- Performance: Retained zero-copy in-process execution, streaming architecture, and instant sub-5ms conversions.
+
+Release 1.1.1:
 - Performance &amp; Size: Decoupled desktop engine dependencies and enabled Link-Time Optimization (LTO) dead code elimination, reducing native binary footprint by ~16%.
 - Native Engine: Introduced modular dynamic loader for native rendering components.
 
