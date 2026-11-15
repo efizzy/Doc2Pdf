@@ -89,7 +89,7 @@ public static class Doc2PdfConverter
             if (status != 0)
             {
                 string error = NativeMethods.GetLastError();
-                throw new Doc2PdfException($"PDF conversion failed for '{fullIn}': {error}", status);
+                throw new Doc2PdfException($"PDF conversion failed for '{fullIn}': {FormatErrorMessage(error)}", status);
             }
         }
         else
@@ -97,7 +97,7 @@ public static class Doc2PdfConverter
             // Format contradicted the extension or extension was missing/disguised:
             // Convert using in-memory buffer with the authentically detected format
             byte[] inBytes = File.ReadAllBytes(fullIn);
-            byte[] outBytes = Convert(inBytes, detectedHint, options);
+            byte[] outBytes = Convert(inBytes, detectedFormat, options);
             File.WriteAllBytes(fullOut, outBytes);
         }
     }
@@ -124,8 +124,22 @@ public static class Doc2PdfConverter
     /// <returns>Rendered PDF bytes.</returns>
     /// <exception cref="ArgumentException">Thrown if inputBytes is null, empty, or exceeds allowable size bounds.</exception>
     /// <exception cref="Doc2PdfException">Thrown if the file is malicious or the native conversion fails.</exception>
-    [Obsolete("Use Convert(byte[], DocumentFormat, Doc2PdfOptions) or Convert(byte[], Format, Doc2PdfOptions) instead.")]
-    public static unsafe byte[] Convert(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null)
+    [Obsolete("Use Convert(byte[], DocumentFormat, Doc2PdfOptions) instead.")]
+    public static byte[] Convert(byte[] inputBytes, string formatHint = "auto", Doc2PdfOptions? options = null)
+    {
+        return ConvertBufferCore(inputBytes, formatHint, options);
+    }
+
+    /// <summary>
+    /// Converts in-memory document bytes using a strongly typed <see cref="DocumentFormat"/>.
+    /// </summary>
+    public static byte[] Convert(byte[] inputBytes, DocumentFormat format, Doc2PdfOptions? options = null)
+    {
+        string hint = format == DocumentFormat.Auto ? "auto" : format.ToFormatHint();
+        return ConvertBufferCore(inputBytes, hint, options);
+    }
+
+    private static unsafe byte[] ConvertBufferCore(byte[] inputBytes, string formatHint, Doc2PdfOptions? options)
     {
         if (inputBytes == null || inputBytes.Length == 0)
             throw new ArgumentException("Input buffer cannot be null or empty.", nameof(inputBytes));
@@ -163,7 +177,7 @@ public static class Doc2PdfConverter
                 if (status != 0)
                 {
                     string error = NativeMethods.GetLastError();
-                    throw new Doc2PdfException($"Buffer conversion failed: {error}", status);
+                    throw new Doc2PdfException($"Buffer conversion failed: {FormatErrorMessage(error)}", status);
                 }
 
                 if (outPtr == null || outLen == 0)
@@ -193,30 +207,6 @@ public static class Doc2PdfConverter
     }
 
     /// <summary>
-    /// Converts in-memory document bytes using a strongly typed <see cref="Format"/>.
-    /// </summary>
-    public static byte[] Convert(byte[] inputBytes, Format format, Doc2PdfOptions? options = null)
-        => Convert(inputBytes, (DocumentFormat)format, options);
-
-    /// <summary>
-    /// Converts in-memory document bytes using a strongly typed <see cref="DocumentFormat"/>.
-    /// </summary>
-    public static byte[] Convert(byte[] inputBytes, DocumentFormat format, Doc2PdfOptions? options = null)
-    {
-        if (format == DocumentFormat.Auto)
-        {
-            return Convert(inputBytes, "auto", options);
-        }
-
-        // Even if a specific format is specified, validate safety against malicious headers
-        DocumentFormatExtensions.ValidateSafety(inputBytes);
-
-        // Header detection takes precedence over mismatched format hint
-        DocumentFormat detected = DocumentFormatExtensions.DetectFormat(inputBytes, format.ToFormatHint());
-        return Convert(inputBytes, detected.ToFormatHint(), options);
-    }
-
-    /// <summary>
     /// Asynchronously converts in-memory document bytes to PDF bytes using <see cref="DocumentFormat"/>.
     /// </summary>
     public static Task<byte[]> ConvertAsync(byte[] inputBytes, DocumentFormat format = DocumentFormat.Auto, Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
@@ -227,12 +217,6 @@ public static class Doc2PdfConverter
             return Convert(inputBytes, format, options);
         }, cancellationToken);
     }
-
-    /// <summary>
-    /// Asynchronously converts in-memory document bytes to PDF bytes using <see cref="Format"/>.
-    /// </summary>
-    public static Task<byte[]> ConvertAsync(byte[] inputBytes, Format format, Doc2PdfOptions? options = null, CancellationToken cancellationToken = default)
-        => ConvertAsync(inputBytes, (DocumentFormat)format, options, cancellationToken);
 
     /// <summary>
     /// Asynchronously converts in-memory document bytes to PDF bytes.
@@ -279,12 +263,6 @@ public static class Doc2PdfConverter
     }
 
     /// <summary>
-    /// Converts a document stream into a PDF output stream using <see cref="Format"/>.
-    /// </summary>
-    public static void Convert(Stream inputStream, Stream outputStream, Format format, Doc2PdfOptions? options = null)
-        => Convert(inputStream, outputStream, (DocumentFormat)format, options);
-
-    /// <summary>
     /// Converts a document stream into a PDF output stream.
     /// </summary>
     [Obsolete("Use Convert(Stream, Stream, DocumentFormat, Doc2PdfOptions) instead.")]
@@ -297,6 +275,16 @@ public static class Doc2PdfConverter
     public static bool IsFormatSupported(string extension)
     {
         return NativeMethods.IsFormatSupported(extension);
+    }
+
+    private static string FormatErrorMessage(string rawError)
+    {
+        if (string.IsNullOrWhiteSpace(rawError)) return "Unknown native conversion error";
+        if (rawError.IndexOf("missing part: word/document.xml", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return "Corrupted or invalid DOCX document (missing required part 'word/document.xml')";
+        }
+        return rawError;
     }
 
     /// <summary>

@@ -15,8 +15,7 @@ public class DocumentTests
     {
         using var doc = new Document();
         Assert.False(doc.IsLoaded);
-        Assert.Equal(Format.Auto, doc.Format);
-        Assert.Equal(DocumentFormat.Auto, doc.DocumentFormat);
+        Assert.Equal(DocumentFormat.Auto, doc.Format);
         Assert.Null(doc.SourcePath);
         Assert.Equal(0, doc.Length);
     }
@@ -38,8 +37,7 @@ public class DocumentTests
         doc.LoadFromString(md, DocumentFormat.Markdown);
 
         Assert.True(doc.IsLoaded);
-        Assert.Equal(Format.Markdown, doc.Format);
-        Assert.Equal(DocumentFormat.Markdown, doc.DocumentFormat);
+        Assert.Equal(DocumentFormat.Markdown, doc.Format);
         Assert.True(doc.Length > 0);
         Assert.Null(doc.SourcePath);
 
@@ -57,8 +55,7 @@ public class DocumentTests
         doc.LoadFromString(html, DocumentFormat.Html);
 
         Assert.True(doc.IsLoaded);
-        Assert.Equal(Format.Html, doc.Format);
-        Assert.Equal(DocumentFormat.Html, doc.DocumentFormat);
+        Assert.Equal(DocumentFormat.Html, doc.Format);
 
         byte[] pdf = doc.ConvertToPdf();
         Assert.NotNull(pdf);
@@ -73,8 +70,7 @@ public class DocumentTests
         doc.LoadFromBytes(mdBytes);
 
         Assert.True(doc.IsLoaded);
-        Assert.Equal(Format.Markdown, doc.Format);
-        Assert.Equal(DocumentFormat.Markdown, doc.DocumentFormat);
+        Assert.Equal(DocumentFormat.Markdown, doc.Format);
 
         byte[] pdf = doc.ConvertToPdf();
         Assert.NotNull(pdf);
@@ -90,8 +86,7 @@ public class DocumentTests
         doc.LoadFromStream(ms, DocumentFormat.Html);
 
         Assert.True(doc.IsLoaded);
-        Assert.Equal(Format.Html, doc.Format);
-        Assert.Equal(DocumentFormat.Html, doc.DocumentFormat);
+        Assert.Equal(DocumentFormat.Html, doc.Format);
 
         using var outMs = new MemoryStream();
         doc.ConvertToPdf(outMs);
@@ -139,53 +134,17 @@ public class DocumentTests
     }
 
     [Fact]
-    public void Document_FormatEnumOverloads_WorkSeamlessly()
+    public void DocumentFormat_Extensions_ConvertCorrectly()
     {
-        // Test Format enum overloads
-        byte[] mdBytes = Encoding.UTF8.GetBytes("# Format Enum Test\n\nTesting concise Format enum.");
-        using var doc = new Document(mdBytes, Format.Markdown);
+        Assert.Equal(DocumentFormat.Docx, "docx".ToDocumentFormat());
+        Assert.Equal(DocumentFormat.Markdown, "md".ToDocumentFormat());
+        Assert.Equal(DocumentFormat.Markdown, "markdown".ToDocumentFormat());
+        Assert.Equal(DocumentFormat.Html, "html".ToDocumentFormat());
+        Assert.Equal(DocumentFormat.Auto, "unrecognized_ext".ToDocumentFormat());
 
-        Assert.True(doc.IsLoaded);
-        Assert.Equal(Format.Markdown, doc.Format);
-        Assert.Equal(DocumentFormat.Markdown, doc.DocumentFormat);
-
-        byte[] pdf = doc.ConvertToPdf();
-        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(pdf, 0, 8));
-
-        // LoadFromString with Format enum
-        doc.LoadFromString("<h2>Html Heading</h2>", Format.Html);
-        Assert.Equal(Format.Html, doc.Format);
-
-        // Document.FromString with Format enum
-        using var docFromStr = Document.FromString("# Hello", Format.Markdown);
-        Assert.Equal(Format.Markdown, docFromStr.Format);
-
-        // Document.FromBytes with Format enum
-        using var docFromBytes = Document.FromBytes(mdBytes, Format.Markdown);
-        Assert.Equal(Format.Markdown, docFromBytes.Format);
-
-        // Document.FromStream with Format enum
-        using var ms = new MemoryStream(mdBytes);
-        using var docFromStream = Document.FromStream(ms, Format.Markdown);
-        Assert.Equal(Format.Markdown, docFromStream.Format);
-    }
-
-    [Fact]
-    public void Format_Extensions_ConvertCorrectly()
-    {
-        Assert.Equal(Format.Docx, "docx".ToFormat());
-        Assert.Equal(Format.Markdown, "md".ToFormat());
-        Assert.Equal(Format.Markdown, "markdown".ToFormat());
-        Assert.Equal(Format.Html, "html".ToFormat());
-        Assert.Equal(Format.Auto, "unrecognized_ext".ToFormat());
-
-        Assert.Equal("docx", Format.Docx.ToFormatHint());
-        Assert.Equal("md", Format.Markdown.ToFormatHint());
-        Assert.Equal("html", Format.Html.ToFormatHint());
-
-        Assert.Equal(DocumentFormat.Docx, Format.Docx.ToDocumentFormat());
-        Assert.Equal(DocumentFormat.Markdown, Format.Markdown.ToDocumentFormat());
-        Assert.Equal(Format.Docx, DocumentFormat.Docx.ToFormat());
+        Assert.Equal("docx", DocumentFormat.Docx.ToFormatHint());
+        Assert.Equal("md", DocumentFormat.Markdown.ToFormatHint());
+        Assert.Equal("html", DocumentFormat.Html.ToFormatHint());
     }
 
     [Fact]
@@ -200,8 +159,7 @@ public class DocumentTests
 
             using var doc = new Document(tempIn);
             Assert.True(doc.IsLoaded);
-            Assert.Equal(Format.Markdown, doc.Format);
-            Assert.Equal(DocumentFormat.Markdown, doc.DocumentFormat);
+            Assert.Equal(DocumentFormat.Markdown, doc.Format);
             Assert.Equal(Path.GetFullPath(tempIn), doc.SourcePath);
 
             doc.ConvertToPdf(tempOut);

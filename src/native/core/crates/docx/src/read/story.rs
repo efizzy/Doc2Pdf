@@ -96,9 +96,13 @@ fn enclosure(f: &FieldState) -> Option<efizzy_doc::eq::Enclosure> {
 }
 
 /// Fields kept as ranges: those whose result another program writes, with formatting and often
-/// several paragraphs (TOCs and citation managers' `ADDIN` fields).
+/// several paragraphs (TOCs and citation managers' `ADDIN` fields, and `MERGEFIELD` fields).
 fn is_range_instr(instr: &str) -> bool {
-    super::is_toc(instr) || instr.trim_start().get(..5).is_some_and(|k| k.eq_ignore_ascii_case("ADDIN"))
+    if super::is_toc(instr) || instr.trim_start().get(..5).is_some_and(|k| k.eq_ignore_ascii_case("ADDIN")) {
+        return true;
+    }
+    let name = instr.split_whitespace().next().unwrap_or("").trim_matches(|c: char| c == '{' || c == '}' || c == '\\');
+    name.eq_ignore_ascii_case("MERGEFIELD")
 }
 
 /// Where a `HYPERLINK` field goes, as a `w:hyperlink` reads: `url`, `url#bookmark` (`\l`) or

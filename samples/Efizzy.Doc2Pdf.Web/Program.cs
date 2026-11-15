@@ -35,19 +35,19 @@ app.MapGet("/api/info", () =>
     {
         name = "Efizzy.Doc2Pdf Web Converter",
         engineVersion = Doc2PdfConverter.GetNativeVersion(),
-        supportedFormats = Enum.GetNames<Format>().Where(f => f != nameof(Format.Auto)).ToArray()
+        supportedFormats = Enum.GetNames<DocumentFormat>().Where(f => f != nameof(DocumentFormat.Auto)).ToArray()
     });
 });
 
 // Sample documents endpoint for one-click testing
 app.MapGet("/api/sample/{name}", (string name) =>
 {
-    if (!Enum.TryParse<Format>(name, true, out var sampleFormat))
+    if (!Enum.TryParse<DocumentFormat>(name, true, out var sampleFormat))
         return Results.NotFound();
 
     return sampleFormat switch
     {
-        Format.Markdown => Results.Content(
+        DocumentFormat.Markdown => Results.Content(
             "# Quarterly Business Report\n\n" +
             "Generated automatically using **Efizzy.Doc2Pdf**!\n\n" +
             "## Key Accomplishments\n" +
@@ -63,7 +63,7 @@ app.MapGet("/api/sample/{name}", (string name) =>
             "text/markdown",
             System.Text.Encoding.UTF8),
 
-        Format.Html => Results.Content(
+        DocumentFormat.Html => Results.Content(
             "<!DOCTYPE html>\n<html><head><meta charset='utf-8'><title>HTML Invoice Sample</title>" +
             "<style>body { font-family: sans-serif; margin: 40px; color: #333; }" +
             "h1 { color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; }" +
@@ -81,7 +81,7 @@ app.MapGet("/api/sample/{name}", (string name) =>
             "text/html",
             System.Text.Encoding.UTF8),
 
-        Format.Rtf => Results.Content(
+        DocumentFormat.Rtf => Results.Content(
             "{\\rtf1\\ansi\\deff0\n{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}{\\f1\\froman\\fcharset0 Times New Roman;}}\n" +
             "{\\colortbl ;\\red30\\green58\\blue138;\\red22\\green101\\blue52;}\n" +
             "\\f0\\fs32 \\b \\cf1 Rich Text Format Document \\cf0\\b0\\par\n" +
@@ -130,10 +130,10 @@ app.MapPost("/api/convert", async (HttpRequest request, ILoggerFactory loggerFac
     string? pages = form["pages"].FirstOrDefault();
 
     // Optional format hint passed as enum
-    Format requestedFormat = Format.Auto;
+    DocumentFormat requestedFormat = DocumentFormat.Auto;
     if (form.TryGetValue("format", out var formatVal) && !string.IsNullOrWhiteSpace(formatVal))
     {
-        Enum.TryParse<Format>(formatVal.ToString(), true, out requestedFormat);
+        Enum.TryParse<DocumentFormat>(formatVal.ToString(), true, out requestedFormat);
     }
 
     // Securely load from uploaded file stream and determine authentic format
@@ -141,9 +141,9 @@ app.MapPost("/api/convert", async (HttpRequest request, ILoggerFactory loggerFac
     try
     {
         using var stream = file.OpenReadStream();
-        Format formatHint = requestedFormat != Format.Auto 
+        DocumentFormat formatHint = requestedFormat != DocumentFormat.Auto 
             ? requestedFormat 
-            : file.FileName.ToFormat();
+            : file.FileName.ToDocumentFormat();
 
         document.LoadFromStream(stream, formatHint);
     }

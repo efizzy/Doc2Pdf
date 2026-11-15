@@ -43,7 +43,7 @@ string outputPath = args[1];
 
 bool markup = false;
 bool comments = false;
-Format explicitFormat = Format.Auto;
+DocumentFormat explicitFormat = DocumentFormat.Auto;
 (float Width, float Height)? paper = null;
 string? watermarkText = null;
 string? watermarkColor = null;
@@ -58,7 +58,7 @@ for (int i = 2; i < args.Length; i++)
 {
     if (args[i].Equals("--format", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
     {
-        if (Enum.TryParse<Format>(args[++i], true, out var parsedFormat))
+        if (Enum.TryParse<DocumentFormat>(args[++i], true, out var parsedFormat))
             explicitFormat = parsedFormat;
     }
     else if (args[i].Equals("--markup", StringComparison.OrdinalIgnoreCase))
@@ -97,7 +97,7 @@ for (int i = 2; i < args.Length; i++)
 try
 {
     using var document = new Document();
-    if (explicitFormat != Format.Auto)
+    if (explicitFormat != DocumentFormat.Auto)
         document.LoadFromFile(inputPath, explicitFormat);
     else
         document.LoadFromFile(inputPath);
@@ -167,7 +167,7 @@ static void RunBenchmark()
 
     Console.WriteLine("\n--- 1. Cold Start Benchmarks ---");
     var sw = Stopwatch.StartNew();
-    using var mdDoc = new Document(mdBytes, Format.Markdown);
+    using var mdDoc = new Document(mdBytes, DocumentFormat.Markdown);
     byte[] pdf1 = mdDoc.ConvertToPdf();
     sw.Stop();
     long coldMdMs = sw.ElapsedMilliseconds;
@@ -178,7 +178,7 @@ static void RunBenchmark()
     Console.WriteLine($"  Working Set after cold start: {coldWorkingSet / 1024.0 / 1024.0:F2} MB");
 
     sw.Restart();
-    using var htmlDoc = new Document(htmlBytes, Format.Html);
+    using var htmlDoc = new Document(htmlBytes, DocumentFormat.Html);
     byte[] pdf2 = htmlDoc.ConvertToPdf();
     sw.Stop();
     long coldHtmlMs = sw.ElapsedMilliseconds;
@@ -200,7 +200,7 @@ static void RunBenchmark()
 
     for (int i = 0; i < iterations; i++)
     {
-        using var doc = new Document(mdBytes, Format.Markdown);
+        using var doc = new Document(mdBytes, DocumentFormat.Markdown);
         _ = doc.ConvertToPdf();
     }
 
@@ -228,7 +228,7 @@ static void RunBenchmark()
 
     for (int i = 0; i < htmlIterations; i++)
     {
-        using var doc = new Document(htmlBytes, Format.Html);
+        using var doc = new Document(htmlBytes, DocumentFormat.Html);
         _ = doc.ConvertToPdf();
     }
 

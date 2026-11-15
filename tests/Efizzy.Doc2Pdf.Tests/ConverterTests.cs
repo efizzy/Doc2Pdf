@@ -438,4 +438,52 @@ public class ConverterTests
 
         Assert.False(Doc2PdfConverter.CachedFormatHints.TryGetCachedPointer("custom_xyz", out _));
     }
+
+    [Fact]
+    public void Convert_DocxWithTableMergeFieldLongAddress_WrapsAndConvertsSuccessfully()
+    {
+        string templatePath = Path.Combine(Directory.GetCurrentDirectory(), "CertificateOfInsurance.docx");
+        if (!File.Exists(templatePath))
+        {
+            templatePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "CertificateOfInsurance.docx"));
+        }
+
+        if (File.Exists(templatePath))
+        {
+            byte[] docxBytes = File.ReadAllBytes(templatePath);
+            using var inMs = new MemoryStream(docxBytes);
+            using var outMs = new MemoryStream();
+            using (var zipIn = new System.IO.Compression.ZipArchive(inMs, System.IO.Compression.ZipArchiveMode.Read))
+            using (var zipOut = new System.IO.Compression.ZipArchive(outMs, System.IO.Compression.ZipArchiveMode.Create, true))
+            {
+                foreach (var entry in zipIn.Entries)
+                {
+                    var newEntry = zipOut.CreateEntry(entry.FullName, System.IO.Compression.CompressionLevel.Optimal);
+                    using var es = entry.Open();
+                    using var ns = newEntry.Open();
+                    if (entry.FullName == "word/document.xml")
+                    {
+                        using var reader = new StreamReader(es, Encoding.UTF8);
+                        string xml = reader.ReadToEnd();
+                        string longAddress = "Plot 1234, Commercial Avenue, Victoria Island Extension, Opposite Federal High Court Complex, Lagos State, Nigeria, West Africa, Postal Code 101241";
+                        xml = xml.Replace("«Address»", longAddress);
+                        byte[] modified = Encoding.UTF8.GetBytes(xml);
+                        ns.Write(modified, 0, modified.Length);
+                    }
+                    else
+                    {
+                        es.CopyTo(ns);
+                    }
+                }
+            }
+
+            byte[] filledDocx = outMs.ToArray();
+            byte[] pdf = Doc2PdfConverter.Convert(filledDocx, DocumentFormat.Docx);
+
+            Assert.NotNull(pdf);
+            Assert.True(pdf.Length > 1000);
+            string header = Encoding.ASCII.GetString(pdf, 0, Math.Min(pdf.Length, 8));
+            Assert.StartsWith("%PDF-", header);
+        }
+    }
 }

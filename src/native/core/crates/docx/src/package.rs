@@ -216,7 +216,7 @@ impl Package {
             if f.is_dir() {
                 continue;
             }
-            let name = f.name().trim_start_matches('/').to_string();
+            let name = f.name().replace('\\', "/").trim_start_matches('/').to_string();
             if f.size() > max_part {
                 return Err(DocxError::Limit(format!("part {name} declares {} bytes", f.size())));
             }
