@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using Efizzy.Doc2Pdf;
 
@@ -9,68 +10,6 @@ namespace Efizzy;
 /// Document formats supported by Efizzy.Doc2Pdf for conversion to PDF.
 /// </summary>
 public enum DocumentFormat
-{
-    /// <summary>
-    /// Automatic detection from file content signature and magic header bytes.
-    /// </summary>
-    Auto = 0,
-
-    /// <summary>
-    /// Microsoft Word 2007+ OpenXML Document (.docx, .docm, .dotx, .dotm).
-    /// </summary>
-    Docx = 1,
-
-    /// <summary>
-    /// Legacy Microsoft Word 97-2003 Binary Document (.doc, .dot).
-    /// </summary>
-    Doc = 2,
-
-    /// <summary>
-    /// Markdown document (.md, .markdown) - CommonMark with GFM tables.
-    /// </summary>
-    Markdown = 3,
-
-    /// <summary>
-    /// HyperText Markup Language (.html, .htm, .xhtml).
-    /// </summary>
-    Html = 4,
-
-    /// <summary>
-    /// Rich Text Format (.rtf).
-    /// </summary>
-    Rtf = 5,
-
-    /// <summary>
-    /// OpenDocument Text (.odt).
-    /// </summary>
-    Odt = 6,
-
-    /// <summary>
-    /// LaTeX document (.tex, .latex, .ltx).
-    /// </summary>
-    Latex = 7,
-
-    /// <summary>
-    /// Plain text document (.txt, .text).
-    /// </summary>
-    PlainText = 8,
-
-    /// <summary>
-    /// Word XML Document (Flat OPC or WordprocessingML 2003).
-    /// </summary>
-    Xml = 9,
-
-    /// <summary>
-    /// Efizzy Document JSON AST (.json, .doc.json).
-    /// </summary>
-    Json = 10
-}
-
-/// <summary>
-/// Document formats supported by Efizzy.Doc2Pdf for conversion to PDF.
-/// Concise alias for <see cref="DocumentFormat"/>.
-/// </summary>
-public enum Format
 {
     /// <summary>
     /// Automatic detection from file content signature and magic header bytes.
@@ -165,24 +104,9 @@ public static class DocumentFormatExtensions
     };
 
     /// <summary>
-    /// Returns the standard format hint string passed to the native converter.
+    /// Converts a file path or extension string to a <see cref="DocumentFormat"/> enum.
     /// </summary>
-    public static string ToFormatHint(this Format format) => ((DocumentFormat)format).ToFormatHint();
-
-    /// <summary>
-    /// Converts a <see cref="Format"/> to a <see cref="DocumentFormat"/>.
-    /// </summary>
-    public static DocumentFormat ToDocumentFormat(this Format format) => (DocumentFormat)format;
-
-    /// <summary>
-    /// Converts a <see cref="DocumentFormat"/> to a <see cref="Format"/>.
-    /// </summary>
-    public static Format ToFormat(this DocumentFormat format) => (Format)format;
-
-    /// <summary>
-    /// Converts a file path or extension string to a <see cref="Format"/> enum.
-    /// </summary>
-    public static Format ToFormat(this string pathOrExt) => (Format)FromPathOrExtension(pathOrExt);
+    public static DocumentFormat ToDocumentFormat(this string pathOrExt) => FromPathOrExtension(pathOrExt);
 
     /// <summary>
     /// Validates that the input bytes do not contain any known dangerous or executable header signatures.
@@ -305,7 +229,15 @@ public static class DocumentFormatExtensions
             {
                 return DocumentFormat.Odt;
             }
-            return DocumentFormat.Docx;
+
+            if (IsDocxZipPackage(bytes, extensionHint))
+            {
+                return DocumentFormat.Docx;
+            }
+
+            throw new Doc2PdfException(
+                "Unsupported file format: The provided ZIP archive is not a recognized document format (DOCX or ODT).",
+                -415);
         }
 
         // 3. Inspect text-based document formats (HTML, XML, JSON, LaTeX, Markdown, PlainText)
@@ -475,6 +407,72 @@ public static class DocumentFormatExtensions
         // Secondary scan across first 512 bytes for "oasis.opendocument.text"
         int maxScan = Math.Min(bytes.Length, 512);
         return ContainsAscii(bytes, 0, maxScan, "oasis.opendocument.text");
+    }
+
+    private static bool IsDocxZipPackage(byte[] bytes, string? extensionHint)
+    {
+        string ext = (extensionHint ?? "").TrimStart('.').ToLowerInvariant();
+        bool hasDocxExtension = ext is "docx" or "docm" or "dotx" or "dotm";
+
+        // If the caller explicitly passed a DOCX extension or format hint, accept it as DOCX
+        if (hasDocxExtension)
+        {
+            return true;
+        }
+
+        // If the buffer is a truncated header sample (< 30 bytes) with no extension hint, default to DOCX
+        if (bytes.Length < 30)
+        {
+            return true;
+        }
+
+        // Quick check: scan first 64KB for "word/" or "word\" markers (local file headers)
+        int scanLimit = Math.Min(bytes.Length, 65536);
+        if (ContainsAscii(bytes, 0, scanLimit, "word/") || ContainsAscii(bytes, 0, scanLimit, "word\\"))
+        {
+            return true;
+        }
+
+        // Check for Open Packaging Conventions (OPC) marker
+        bool hasContentTypes = ContainsAscii(bytes, 0, scanLimit, "[Content_Types].xml");
+        if (hasContentTypes)
+        {
+            if (ContainsAscii(bytes, 0, scanLimit, "wordprocessingml"))
+            {
+                return true;
+            }
+
+            // Exclude other Office formats (Excel, PowerPoint)
+            if (ContainsAscii(bytes, 0, scanLimit, "spreadsheetml") ||
+                ContainsAscii(bytes, 0, scanLimit, "presentationml") ||
+                ContainsAscii(bytes, 0, scanLimit, "xl/") ||
+                ContainsAscii(bytes, 0, scanLimit, "xl\\") ||
+                ContainsAscii(bytes, 0, scanLimit, "ppt/") ||
+                ContainsAscii(bytes, 0, scanLimit, "ppt\\"))
+            {
+                return false;
+            }
+        }
+
+        // Full archive inspection if the byte array is a complete zip
+        try
+        {
+            using var ms = new MemoryStream(bytes, writable: false);
+            using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
+            foreach (var entry in zip.Entries)
+            {
+                string name = entry.FullName.Replace('\\', '/');
+                if (name.StartsWith("word/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool ContainsAscii(byte[] bytes, int offset, int length, string pattern)

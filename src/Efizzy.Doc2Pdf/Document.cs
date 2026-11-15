@@ -27,14 +27,9 @@ public class Document : IDisposable
     public bool IsLoaded => _isLoaded;
 
     /// <summary>
-    /// The resolved or explicitly specified document format as a concise <see cref="Format"/> enum.
-    /// </summary>
-    public Format Format => (Format)_format;
-
-    /// <summary>
     /// The resolved or explicitly specified document format as <see cref="DocumentFormat"/>.
     /// </summary>
-    public DocumentFormat DocumentFormat => _format;
+    public DocumentFormat Format => _format;
 
     /// <summary>
     /// The physical file path if loaded from disk, otherwise <c>null</c>.
@@ -81,15 +76,6 @@ public class Document : IDisposable
     }
 
     /// <summary>
-    /// Loads a document from a file path with an explicit format hint.
-    /// </summary>
-    /// <param name="filePath">Path to the document on disk.</param>
-    /// <param name="format">Format hint (default: <see cref="Format.Auto"/>).</param>
-    public Document(string filePath, Format format) : this(filePath, (DocumentFormat)format)
-    {
-    }
-
-    /// <summary>
     /// Loads a document from raw in-memory bytes.
     /// </summary>
     /// <param name="bytes">Raw document bytes.</param>
@@ -100,15 +86,6 @@ public class Document : IDisposable
     }
 
     /// <summary>
-    /// Loads a document from raw in-memory bytes.
-    /// </summary>
-    /// <param name="bytes">Raw document bytes.</param>
-    /// <param name="format">Format hint (default: <see cref="Format.Auto"/>).</param>
-    public Document(byte[] bytes, Format format) : this(bytes, (DocumentFormat)format)
-    {
-    }
-
-    /// <summary>
     /// Loads a document from a readable stream.
     /// </summary>
     /// <param name="stream">Readable stream containing the document payload.</param>
@@ -116,15 +93,6 @@ public class Document : IDisposable
     public Document(Stream stream, DocumentFormat format = DocumentFormat.Auto)
     {
         LoadFromStream(stream, format);
-    }
-
-    /// <summary>
-    /// Loads a document from a readable stream.
-    /// </summary>
-    /// <param name="stream">Readable stream containing the document payload.</param>
-    /// <param name="format">Format hint (default: <see cref="Format.Auto"/>).</param>
-    public Document(Stream stream, Format format) : this(stream, (DocumentFormat)format)
-    {
     }
 
     // =========================================================================
@@ -138,22 +106,10 @@ public class Document : IDisposable
         => new Document(filePath, format);
 
     /// <summary>
-    /// Creates and loads a new <see cref="Document"/> from a file path.
-    /// </summary>
-    public static Document FromFile(string filePath, Format format)
-        => new Document(filePath, (DocumentFormat)format);
-
-    /// <summary>
     /// Creates and loads a new <see cref="Document"/> from raw bytes.
     /// </summary>
     public static Document FromBytes(byte[] bytes, DocumentFormat format = DocumentFormat.Auto)
         => new Document(bytes, format);
-
-    /// <summary>
-    /// Creates and loads a new <see cref="Document"/> from raw bytes.
-    /// </summary>
-    public static Document FromBytes(byte[] bytes, Format format)
-        => new Document(bytes, (DocumentFormat)format);
 
     /// <summary>
     /// Creates and loads a new <see cref="Document"/> from text/markup content.
@@ -166,32 +122,14 @@ public class Document : IDisposable
     }
 
     /// <summary>
-    /// Creates and loads a new <see cref="Document"/> from text/markup content.
-    /// </summary>
-    public static Document FromString(string content, Format format, Encoding? encoding = null)
-        => FromString(content, (DocumentFormat)format, encoding);
-
-    /// <summary>
     /// Creates and loads a new <see cref="Document"/> from a readable stream.
     /// </summary>
     public static Document FromStream(Stream stream, DocumentFormat format = DocumentFormat.Auto)
         => new Document(stream, format);
 
-    /// <summary>
-    /// Creates and loads a new <see cref="Document"/> from a readable stream.
-    /// </summary>
-    public static Document FromStream(Stream stream, Format format)
-        => new Document(stream, (DocumentFormat)format);
-
     // =========================================================================
     // Loading Methods
     // =========================================================================
-
-    /// <summary>
-    /// Loads or reloads document content from a physical file.
-    /// </summary>
-    public Document LoadFromFile(string filePath, Format format)
-        => LoadFromFile(filePath, (DocumentFormat)format);
 
     /// <summary>
     /// Loads or reloads document content from a physical file.
@@ -227,12 +165,6 @@ public class Document : IDisposable
     /// <summary>
     /// Loads or reloads document content from an in-memory byte array.
     /// </summary>
-    public Document LoadFromBytes(byte[] bytes, Format format)
-        => LoadFromBytes(bytes, (DocumentFormat)format);
-
-    /// <summary>
-    /// Loads or reloads document content from an in-memory byte array.
-    /// </summary>
     /// <param name="bytes">Raw document bytes.</param>
     /// <param name="format">Format hint (default: <see cref="DocumentFormat.Auto"/>).</param>
     /// <returns>This document instance for fluent chaining.</returns>
@@ -259,12 +191,6 @@ public class Document : IDisposable
     /// <summary>
     /// Loads document content from a text or markup string (Markdown, HTML, LaTeX, XML, RTF, PlainText).
     /// </summary>
-    public Document LoadFromString(string content, Format format, Encoding? encoding = null)
-        => LoadFromString(content, (DocumentFormat)format, encoding);
-
-    /// <summary>
-    /// Loads document content from a text or markup string (Markdown, HTML, LaTeX, XML, RTF, PlainText).
-    /// </summary>
     /// <param name="content">Document text or markup.</param>
     /// <param name="format">Document format (e.g., <see cref="DocumentFormat.Markdown"/>, <see cref="DocumentFormat.Html"/>).</param>
     /// <param name="encoding">Character encoding (default UTF-8).</param>
@@ -279,12 +205,6 @@ public class Document : IDisposable
         byte[] bytes = encoding.GetBytes(content);
         return LoadFromBytes(bytes, format);
     }
-
-    /// <summary>
-    /// Loads document content from a readable stream.
-    /// </summary>
-    public Document LoadFromStream(Stream stream, Format format)
-        => LoadFromStream(stream, (DocumentFormat)format);
 
     /// <summary>
     /// Loads document content from a readable stream.

@@ -82,7 +82,7 @@ doc1.ConvertToPdf("Report.pdf");
 
 // 2. Load directly from a raw text/markup string (Markdown, HTML, RTF, etc.)
 using var doc2 = new Document();
-doc2.LoadFromString("# Direct Markdown\n\nConverted in memory.", Format.Markdown);
+doc2.LoadFromString("# Direct Markdown\n\nConverted in memory.", DocumentFormat.Markdown);
 byte[] pdfBytes = doc2.ConvertToPdf();
 
 // 3. Load from byte array with auto format detection

@@ -18,6 +18,11 @@ target/
 **/*.rs.bk
 Cargo.lock
 
+# Packages
+*.nupkg
+*.snupkg
+nupkg/
+
 # OS
 .DS_Store
 Thumbs.db
