@@ -91,6 +91,20 @@ public static class Doc2PdfConverter
                 string error = NativeMethods.GetLastError();
                 throw new Doc2PdfException($"PDF conversion failed for '{fullIn}': {FormatErrorMessage(error)}", status);
             }
+
+            if (!options.IsEditable || options.Signature != null)
+            {
+                byte[] pdfBytes = File.ReadAllBytes(fullOut);
+                if (!options.IsEditable)
+                {
+                    pdfBytes = Security.PdfFlattener.Flatten(pdfBytes);
+                }
+                if (options.Signature != null)
+                {
+                    pdfBytes = Security.PdfSigner.Sign(pdfBytes, options.Signature);
+                }
+                File.WriteAllBytes(fullOut, pdfBytes);
+            }
         }
         else
         {
@@ -192,6 +206,17 @@ public static class Doc2PdfConverter
 
                 byte[] result = new byte[(int)outLen];
                 Marshal.Copy((IntPtr)outPtr, result, 0, (int)outLen);
+
+                if (!options.IsEditable)
+                {
+                    result = Security.PdfFlattener.Flatten(result);
+                }
+
+                if (options.Signature != null)
+                {
+                    result = Security.PdfSigner.Sign(result, options.Signature);
+                }
+
                 return result;
             }
             finally

@@ -12,7 +12,7 @@
     <Title>Efizzy.Doc2Pdf</Title>
     <AssemblyName>Efizzy.Doc2Pdf</AssemblyName>
     <RootNamespace>Efizzy.Doc2Pdf</RootNamespace>
-    <Version>2.0.1</Version>
+    <Version>2.0.2</Version>
     <Authors>Efizzy</Authors>
     <Company>Efizzy</Company>
     <Product>Efizzy.Doc2Pdf</Product>
@@ -23,7 +23,15 @@
     <PackageProjectUrl>https://github.com/efizzy/Doc2Pdf</PackageProjectUrl>
     <RepositoryUrl>https://github.com/efizzy/Doc2Pdf</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>Release 2.0.0:
+    <PackageReleaseNotes>Release 2.0.2:
+- Security &amp; Integrity: Added digital signature and document certification (DocMDP / PAdES) with tamper detection (PdfSignatureOptions, PdfCertificationLevel).
+- Form Flattening: Added IsEditable option (default false) to flatten and strip interactive form fields (/AcroForm, /Widget) into non-editable static visual content.
+- Fix: Fixed Word MERGEFIELD table cell line-wrapping and ZIP path separator normalization.
+
+Release 2.0.1:
+- Fix: Fixed Word MERGEFIELD table cell line-wrapping and ZIP path separator normalization.
+
+Release 2.0.0:
 - Major Architecture: Introduced object-oriented Document class (new Document(), LoadFromFile(), LoadFromBytes(), LoadFromString(), LoadFromStream(), ConvertToPdf()).
 - Namespace Redesign: Moved DocumentFormat and introduced concise Format enum directly in root Efizzy namespace.
 - Global Usings: Added automatic MSBuild build and buildTransitive props providing zero-effort global usings for consumer projects.

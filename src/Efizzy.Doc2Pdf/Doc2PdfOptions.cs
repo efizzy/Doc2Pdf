@@ -134,6 +134,19 @@ public record Doc2PdfOptions
     public string? CustomFontsDirectory { get; init; } = null;
 
     /// <summary>
+    /// If true, interactive form fields remain editable in the generated PDF.
+    /// If false (the default), all form fields are removed and flattened into non-editable static visual content.
+    /// </summary>
+    public bool IsEditable { get; init; } = false;
+
+    /// <summary>
+    /// Optional digital signature configuration. If provided, the generated PDF will be cryptographically signed
+    /// and certified (DocMDP) with the specified X.509 certificate, permanently detecting tampering and invalidating
+    /// the document if modified.
+    /// </summary>
+    public PdfSignatureOptions? Signature { get; init; } = null;
+
+    /// <summary>
     /// Default options.
     /// </summary>
     public static Doc2PdfOptions Default => new();

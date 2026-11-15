@@ -28,6 +28,8 @@ Powered by native in-process engine written in pure Rust extracted from [WordCra
   - Paper sizing: Scale to standard sizes (Letter, A4, Legal, A3, A5) or retain original document geometry.
 - **Enterprise & Security Features:**
   - **Zero-Trust Magic Byte & Header Validation:** Auto-detects authentic file types by inspecting binary header magic bytes rather than blindly trusting file extensions. Automatically intercepts and rejects disguised malicious binaries (Windows PE/MZ executables, Linux ELF, macOS Mach-O, Java bytecode, Windows LNK shortcuts, and Unix shebang scripts) with error code `-403` before any native parsing or execution occurs.
+  - **Form Field Flattening (`IsEditable`):** By default (`IsEditable = false`), interactive PDF form fields (`/AcroForm`, `/Widget`) are automatically stripped and baked into non-editable static visual content, preventing recipients or PDF viewers from modifying form inputs. Setting `IsEditable = true` retains interactive form fields.
+  - **Cryptographic Digital Signatures & DocMDP Certification:** Digitally sign and certify generated PDFs using standard X.509 certificates (PAdES / PKCS#7 detached `adbe.pkcs7.detached`). Embeds DocMDP certification dictionaries (`PdfCertificationLevel.NoChangesPermitted`) that permanently lock the document and immediately flag any tampering or alteration across all standard PDF viewers.
   - **Dynamic Watermarking:** Diagonal or horizontal customizable watermarks (text, hex color, opacity).
   - **Page Range Filtering:** Selectively render specific pages (e.g. `"1-3, 5"`).
   - **Custom Fonts Directory:** Load and catalog custom `.ttf`, `.otf`, `.ttc` fonts on the fly.
@@ -139,6 +141,34 @@ var options = new Doc2PdfOptions
 
 using var auditDoc = new Document("AnnualAudit.docx");
 auditDoc.ConvertToPdf("AnnualAudit.pdf", options);
+```
+
+### 4. Non-Editable Flattening & Cryptographic Digital Signing
+
+```csharp
+using Efizzy.Doc2Pdf;
+using Efizzy.Doc2Pdf.Security;
+
+var options = new Doc2PdfOptions
+{
+    // Prevent recipient form modification (removes /AcroForm & /Widget)
+    IsEditable = false, // default is false
+
+    // Cryptographically sign & certify the PDF (PAdES / DocMDP)
+    Signature = new PdfSignatureOptions
+    {
+        CertificatePath = "company_cert.pfx",
+        CertificatePassword = "SecretPassword123!",
+        SignerName = "Efizzy Insurance Underwriter",
+        Reason = "Document Authenticity & Integrity Certification",
+        Location = "Lagos, Nigeria",
+        ContactInfo = "security@efizzy.com",
+        CertificationLevel = PdfCertificationLevel.NoChangesPermitted // Flags any alteration
+    }
+};
+
+using var certDoc = new Document("CertificateOfInsurance.docx");
+certDoc.ConvertToPdf("CertificateOfInsurance_Signed.pdf", options);
 ```
 
 ---
